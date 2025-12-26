@@ -3,129 +3,94 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Self Chess</title>
+    <title>Neon Grid Defender</title>
     <style>
-        /* Base Styles */
         body {
             display: flex;
-            flex-direction: column;
             justify-content: center;
             align-items: center;
-            min-height: 100vh;
+            height: 100vh;
+            width: 100vw;
             margin: 0;
-            background-color: #1c1c1c;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: #dcdcdc;
+            background-color: #1a1a1a;
+            font-family: sans-serif;
             overflow: hidden;
         }
 
-        /* Game Container (Maximizes a square board within the viewport) */
-        #game-container {
+        #gameContainer {
             position: relative;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            padding: 20px;
-            box-sizing: border-box;
-            width: 100vw;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            border: 2px solid #00ffff;
+            /* Full screen within IFRAME */
+            width: 100vw; 
             height: 100vh;
         }
 
-        /* Chess Board Styling */
-        #chessboard {
-            display: grid;
-            border: 8px solid #3c3f41;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
-            /* Rotation Transition */
-            transition: transform 1.0s ease-in-out;
-            transform-style: preserve-3d;
+        #gameCanvas {
+            display: block;
+            background-color: #000000;
+            width: 100%;
+            height: 100%;
         }
 
-        /* Class applied when Black is the current player (rotates the board 180deg) */
-        .board-rotated {
-            transform: rotate(180deg);
+        #uiOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            color: #00ffff;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 20px;
         }
 
-        .cell {
-            position: relative;
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: #ff4444;
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
-            user-select: none;
+            text-align: center;
+            font-size: 30px;
+            display: none;
+            pointer-events: all;
+            z-index: 400;
+        }
+
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 24px;
             cursor: pointer;
-        }
-
-        /* Cell Colors (Dark/Light wood aesthetic) */
-        .light {
-            background-color: #e0e4cc;
-        }
-        .dark {
-            background-color: #77926b;
-        }
-
-        /* Piece Styling (Unicode Chess Pieces) */
-        .piece {
-            font-size: 4vmin; /* Use viewport units for scaling */
-            line-height: 1;
-            /* Piece counter-rotation transition is synced with the board transition */
-            transition: transform 1.0s ease-in-out;
-            z-index: 10;
-        }
-
-        .piece-W {
-            color: #f7f7f7;
-            text-shadow: 1px 1px 2px #333;
-        }
-        .piece-B {
-            color: #333333;
-            text-shadow: 1px 1px 2px #dcdcdc;
-        }
-
-        /* Counter-Rotation for Pieces: If the board is rotated, rotate the piece back 180deg */
-        .board-rotated .piece {
-            transform: rotate(180deg);
-        }
-        /* Ensure non-rotated pieces start at 0deg transform */
-        #chessboard:not(.board-rotated) .piece {
-            transform: rotate(0deg);
-        }
-
-        /* Selection and Move Highlights */
-        .selected {
-            box-shadow: inset 0 0 10px #00ffff;
-            background-color: rgba(0, 255, 255, 0.3) !important;
-        }
-
-        .move-highlight {
-            background-color: rgba(255, 255, 0, 0.4) !important;
-        }
-        
-        /* UI and Status */
-        #status-bar {
-            margin-top: 10px;
-            font-size: 1.2em;
-            padding: 10px;
-            background: rgba(0, 0, 0, 0.4);
+            background-color: #00ffff;
+            color: #1a1a1a;
+            border: none;
             border-radius: 5px;
-            z-index: 50;
+            transition: background-color 0.2s;
         }
-        #turn-indicator {
-            font-weight: bold;
-            color: white;
-            padding: 0 5px;
+
+        #restartButton:hover {
+            background-color: #ffffff;
         }
         
-        /* --- Menu Overlay Styles (Standardized) --- */
+        /* --- MENU OVERLAY STYLES --- */
         #menu-overlay {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.95);
+            background-color: rgba(0, 0, 0, 0.9);
             color: #fff;
-            display: flex; 
+            display: flex; /* Display initially for start screen */
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -135,7 +100,7 @@
         }
 
         #menu-overlay h2 {
-            color: #e0e4cc;
+            color: #00ffff;
             font-size: 2.5em;
             margin-bottom: 20px;
         }
@@ -145,11 +110,15 @@
             margin: 10px;
             font-size: 1em;
             cursor: pointer;
-            background-color: #e0e4cc;
+            background-color: #00ffff;
             color: #1a1a1a;
             border: none;
             border-radius: 5px;
             transition: background-color 0.2s;
+        }
+
+        #menu-overlay button:hover {
+            background-color: #ffffff;
         }
         
         #instructions-box {
@@ -162,323 +131,407 @@
             text-align: left;
             display: none;
         }
-        
-        #game-over-screen {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            z-index: 400;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
 
-    <div id="game-container">
-        
-        <div id="status-bar">
-            Current Turn: <span id="turn-indicator">White</span>
-        </div>
-
-        <!-- Initial board state has no rotation (White starts at South/Bottom) -->
-        <div id="chessboard">
-            <!-- Cells generated by JavaScript -->
-        </div>
-        
-        <!-- NEW MENU OVERLAY -->
-        <div id="menu-overlay">
-            <h2>Self Chess</h2>
-            <button id="btn-start" onclick="startGame()">Start Game (White)</button>
-            <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
-            <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
-            <div id="instructions-box">
-                <h3>Controls & Goal:</h3>
-                <p><strong>Goal:</strong> Play both White and Black sides of a standard chess game.</p>
-                <p><strong>Perspective:</strong> The board automatically rotates 180° after every move, ensuring the current player's side is always at the South (bottom).</p>
-                <p><strong>Movement:</strong> Click a piece, then click a destination square to move/capture.</p>
-                <p>Note: This is a visually focused prototype. Basic move validation is implemented, but advanced rules (checkmate, castling, en passant) are omitted. The player determines the winner.</p>
-                <p>Press ESC to pause/resume the game.</p>
-            </div>
-        </div>
-        
-        <div id="game-over-screen">
-             <h1>Game Ended by Player</h1>
-             <p>Final Status: <span id="final-status">Draw</span></p>
-             <button onclick="startGame()">Start New Game</button>
+<div id="gameContainer">
+    <canvas id="gameCanvas"></canvas>
+    <div id="uiOverlay">
+        Score: <span id="scoreDisplay">0</span>
+    </div>
+    
+    <!-- NEW MENU OVERLAY -->
+    <div id="menu-overlay">
+        <h2>Neon Grid Defender</h2>
+        <button id="btn-start" onclick="startGame()">Start Arena</button>
+        <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
+        <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+        <div id="instructions-box">
+            <h3>Controls & Goal:</h3>
+            <p><strong>Goal:</strong> Survive the enemy onslaught for as long as possible.</p>
+            <p><strong>Movement:</strong> WASD or Arrow Keys.</p>
+            <p><strong>Shoot:</strong> Click or Tap to fire projectiles in the mouse/tap direction.</p>
+            <p>Enemies scale in speed and spawn rate over time. Hitting an enemy ends the game.</p>
+            <p>Press ESC to pause/resume the game.</p>
         </div>
     </div>
 
-    <script>
-        // --- Game Constants ---
-        const GRID_SIZE = 8;
-        const PIECES = {
-            'K': '&#9812;', 'Q': '&#9813;', 'R': '&#9814;', 'B': '&#9815;', 'N': '&#9816;', 'P': '&#9817;',
-            'k': '&#9818;', 'q': '&#9819;', 'r': '&#9820;', 'b': '&#9821;', 'n': '&#9822;', 'p': '&#9823;'
-        };
-        const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+    <div id="gameOverScreen">
+        <h1>GAME OVER</h1>
+        <p>You survived the AI onslaught!</p>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button id="restartButton">Restart Arena</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const UI_SCORE = document.getElementById('scoreDisplay');
+        const GAME_OVER_SCREEN = document.getElementById('gameOverScreen');
+        const FINAL_SCORE = document.getElementById('finalScore');
+        const RESTART_BUTTON = document.getElementById('restartButton');
+
+        // Menu Elements
+        const MENU_OVERLAY = document.getElementById('menu-overlay');
+        const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        const BTN_RESUME = document.getElementById('btn-resume');
+        const BTN_START = document.getElementById('btn-start'); 
+
+        // --- Game Constants (These define the logic grid, now dynamic) ---
+        let CANVAS_WIDTH = window.innerWidth;
+        let CANVAS_HEIGHT = window.innerHeight;
+        const PLAYER_RADIUS = 10;
+        const PROJECTILE_SPEED = 8;
+        const PROJECTILE_SIZE = 2;
 
         // --- Game State ---
-        let board = [];
-        let currentTurn = 'W'; // 'W' or 'B'
-        let selectedCell = null; // {r, c}
-        let isBoardRotated = false; // False = White (South) at bottom, True = Black (South) at bottom
-        let isGamePaused = true;
-        let gameRunning = false;
+        let gameLoopId;
+        let score = 0;
+        let isGameOver = false;
+        let isGamePaused = true; // Start paused
+        let keys = {};
+        let lastUpdateTime = 0;
+        let lastEnemySpawnTime = 0;
+        let baseEnemySpawnInterval = 2000; // ms
+        let enemies = [];
+        let projectiles = [];
+        let player = null;
 
-        // --- DOM Elements ---
-        const chessboardEl = document.getElementById('chessboard');
-        const turnIndicatorEl = document.getElementById('turn-indicator');
-        const menuOverlayEl = document.getElementById('menu-overlay');
-        const instructionsBoxEl = document.getElementById('instructions-box');
-        const btnResumeEl = document.getElementById('btn-resume');
-        const btnStartEl = document.getElementById('btn-start');
-        const gameOverScreenEl = document.getElementById('game-over-screen');
-
-        // --- Utility & Menu Functions ---
+        // --- Utility Functions & Menu Logic ---
         
-        function toggleInstructions() {
-            instructionsBoxEl.style.display = instructionsBoxEl.style.display === 'block' ? 'none' : 'block';
-        }
+        function resizeCanvas() {
+            CANVAS_WIDTH = window.innerWidth;
+            CANVAS_HEIGHT = window.innerHeight;
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
 
-        function resumeGame() {
-            if (!gameRunning) return;
-            isGamePaused = false;
-            menuOverlayEl.style.display = 'none';
+            if (player) {
+                player.x = Math.max(player.radius, Math.min(CANVAS_WIDTH - player.radius, player.x));
+                player.y = Math.max(player.radius, Math.min(CANVAS_HEIGHT - player.radius, player.y));
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+
+        function toggleInstructions() {
+            INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
         }
 
         function pauseGame() {
-            if (!gameRunning) return;
+            if (isGameOver) return;
             isGamePaused = true;
-            menuOverlayEl.style.display = 'flex';
-            btnStartEl.style.display = 'none';
-            btnResumeEl.style.display = 'block'; 
-            instructionsBoxEl.style.display = 'none';
-        }
-        
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                gameRunning ? (isGamePaused ? resumeGame() : pauseGame()) : null;
-            }
-        });
-
-        function setupBoardSize() {
-            const container = document.getElementById('game-container');
-            // Calculate size based on the smaller dimension, reserving 80px for margins/status
-            const size = Math.min(container.clientWidth, container.clientHeight) - 80; 
-            
-            const cellSize = Math.floor(size / GRID_SIZE);
-            const boardSizePx = cellSize * GRID_SIZE;
-
-            chessboardEl.style.width = `${boardSizePx}px`;
-            chessboardEl.style.height = `${boardSizePx}px`;
-            chessboardEl.style.gridTemplateColumns = `repeat(${GRID_SIZE}, ${cellSize}px)`;
-            chessboardEl.style.gridTemplateRows = `repeat(${GRID_SIZE}, ${cellSize}px)`;
-        }
-        window.addEventListener('resize', setupBoardSize);
-
-        // --- Chess Logic Core ---
-
-        function fenToBoard(fen) {
-            const rows = fen.split(' ')[0].split('/');
-            const newBoard = [];
-            for (let r = 0; r < GRID_SIZE; r++) {
-                newBoard[r] = [];
-                let c = 0;
-                for (const char of rows[r]) {
-                    if (PIECES[char]) {
-                        newBoard[r][c] = char;
-                        c++;
-                    } else if (!isNaN(parseInt(char))) {
-                        // Empty squares
-                        for (let i = 0; i < parseInt(char); i++) {
-                            newBoard[r][c] = null;
-                            c++;
-                        }
-                    }
-                }
-            }
-            return newBoard;
+            MENU_OVERLAY.style.display = 'flex';
+            BTN_START.style.display = 'none';
+            BTN_RESUME.style.display = 'block'; 
+            INSTRUCTIONS_BOX.style.display = 'none';
         }
 
-        function renderBoard() {
-            if (isGamePaused) return;
-
-            chessboardEl.innerHTML = '';
-            
-            for (let r = 0; r < GRID_SIZE; r++) {
-                for (let c = 0; c < GRID_SIZE; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = 'cell';
-                    cell.classList.add(((r + c) % 2 === 0) ? 'light' : 'dark');
-                    cell.dataset.r = r;
-                    cell.dataset.c = c;
-                    cell.onclick = () => handleCellClick(r, c);
-
-                    if (board[r][c]) {
-                        const pieceCode = board[r][c];
-                        const pieceEl = document.createElement('div');
-                        pieceEl.classList.add('piece');
-                        pieceEl.classList.add(pieceCode === pieceCode.toUpperCase() ? 'piece-W' : 'piece-B');
-                        pieceEl.innerHTML = PIECES[pieceCode];
-                        
-                        cell.appendChild(pieceEl);
-                    }
-                    
-                    if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
-                        cell.classList.add('selected');
-                    }
-                    
-                    chessboardEl.appendChild(cell);
-                }
-            }
-        }
-        
-        function highlightValidMoves(piece, r, c) {
-            // Placeholder: Simple proximity highlight for visual effect.
-            // A full chess engine is not provided.
-            
-            const highlights = [];
-            for(let dr = -1; dr <= 1; dr++) {
-                for(let dc = -1; dc <= 1; dc++) {
-                    if (dr === 0 && dc === 0) continue;
-                    const nr = r + dr;
-                    const nc = c + dc;
-                    if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
-                        highlights.push({r: nr, c: nc});
-                    }
-                }
-            }
-            
-            document.querySelectorAll('.cell').forEach(cellEl => {
-                cellEl.classList.remove('move-highlight');
-                const hr = parseInt(cellEl.dataset.r);
-                const hc = parseInt(cellEl.dataset.c);
-                if (highlights.some(h => h.r === hr && h.c === hc)) {
-                    // Prevent highlighting a square occupied by the current player's own piece
-                    const targetPiece = board[hr][hc];
-                    const targetColor = targetPiece ? (targetPiece === targetPiece.toUpperCase() ? 'W' : 'B') : null;
-                    if (targetColor !== currentTurn) {
-                       cellEl.classList.add('move-highlight');
-                    }
-                }
-            });
-        }
-        
-        function clearHighlights() {
-            document.querySelectorAll('.cell').forEach(cellEl => {
-                cellEl.classList.remove('selected', 'move-highlight');
-            });
-        }
-
-        function handleCellClick(r, c) {
-            if (isGamePaused) return;
-
-            const pieceCode = board[r][c];
-            const pieceColor = pieceCode ? (pieceCode === pieceCode.toUpperCase() ? 'W' : 'B') : null;
-
-            // 1. Select a piece of the current turn's color
-            if (pieceColor === currentTurn) {
-                clearHighlights();
-                selectedCell = { r, c };
-                highlightValidMoves(pieceCode, r, c);
-                document.querySelector(`[data-r="${r}"][data-c="${c}"]`).classList.add('selected');
-                return;
-            }
-
-            // 2. Move selected piece to target cell
-            if (selectedCell) {
-                const startR = selectedCell.r;
-                const startC = selectedCell.c;
-                
-                // Simplified validation: Only allow moves to highlighted squares (which excludes own pieces)
-                const targetCellEl = document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
-                if (targetCellEl && targetCellEl.classList.contains('move-highlight')) {
-                    
-                    // Execute Move
-                    board[r][c] = board[startR][startC];
-                    board[startR][startC] = null;
-                    
-                    // Reset selection
-                    selectedCell = null;
-                    clearHighlights();
-                    
-                    // Next Turn & Rotate
-                    switchTurn();
-                    return;
-                }
-            }
-            
-            // 3. Deselect if clicking an invalid or empty space without a current selection
-            if (selectedCell && !pieceCode) {
-                selectedCell = null;
-                clearHighlights();
-            }
-        }
-        
-        function rotateBoard() {
-            isBoardRotated = !isBoardRotated;
-            if (isBoardRotated) {
-                chessboardEl.classList.add('board-rotated');
-            } else {
-                chessboardEl.classList.remove('board-rotated');
-            }
-        }
-
-        function switchTurn() {
-            currentTurn = (currentTurn === 'W') ? 'B' : 'W';
-            
-            turnIndicatorEl.textContent = (currentTurn === 'W') ? 'White' : 'Black';
-            turnIndicatorEl.style.color = (currentTurn === 'W') ? '#f7f7f7' : '#333333';
-            turnIndicatorEl.style.backgroundColor = (currentTurn === 'W') ? '#3c3f41' : '#e0e4cc';
-            
-            rotateBoard();
-            
-            // Rerender after rotation to ensure piece counter-rotation is correctly applied via CSS
-            renderBoard(); 
+        function resumeGame() {
+            if (isGameOver) return;
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+            lastUpdateTime = performance.now();
+            requestAnimationFrame(gameLoop);
         }
 
         function startGame() {
-            gameRunning = true;
             isGamePaused = false;
-            
-            // Initial setup: White to move, board is NOT rotated (White pieces at the bottom/South)
-            board = fenToBoard(STARTING_FEN);
-            currentTurn = 'W';
-            isBoardRotated = false; 
-            
-            setupBoardSize();
-            gameOverScreenEl.style.display = 'none';
-            menuOverlayEl.style.display = 'none';
-            
-            // Set initial rotation state (no rotation)
-            chessboardEl.classList.remove('board-rotated');
-            
-            // Set initial turn indicator visually
-            turnIndicatorEl.textContent = 'White';
-            turnIndicatorEl.style.color = '#f7f7f7';
-            turnIndicatorEl.style.backgroundColor = '#3c3f41';
-            
-            renderBoard();
+            MENU_OVERLAY.style.display = 'none';
+            initGame();
         }
 
-        // --- Initial Setup ---
-        window.onload = () => {
-            setupBoardSize();
-            // Start the game loop, which will initially draw the board structure.
-            renderBoard(); 
-            // Display menu
-            menuOverlayEl.style.display = 'flex';
-        };
+        /** Calculates distance between two points */
+        function dist(x1, y1, x2, y2) {
+            return Math.hypot(x2 - x1, y2 - y1);
+        }
 
-    </script>
+        /** Normalizes a vector */
+        function normalize(dx, dy) {
+            const length = Math.hypot(dx, dy);
+            if (length === 0) return { x: 0, y: 0 };
+            return { x: dx / length, y: dy / length };
+        }
+
+        // --- Entity Classes ---
+
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = PLAYER_RADIUS;
+                this.speed = 4;
+            }
+
+            update() {
+                if (isGameOver || isGamePaused) return;
+
+                let dx = 0;
+                let dy = 0;
+
+                // WASD or Arrow Keys
+                if (keys['w'] || keys['ArrowUp']) dy -= 1;
+                if (keys['s'] || keys['ArrowDown']) dy += 1;
+                if (keys['a'] || keys['ArrowLeft']) dx -= 1;
+                if (keys['d'] || keys['ArrowRight']) dx += 1;
+
+                const vector = normalize(dx, dy);
+
+                this.x += vector.x * this.speed;
+                this.y += vector.y * this.speed;
+
+                // Boundary checking
+                this.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(CANVAS_HEIGHT - this.radius, this.y));
+            }
+
+            draw() {
+                ctx.fillStyle = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Enemy {
+            constructor(x, y, levelMultiplier) {
+                this.x = x;
+                this.y = y;
+                this.size = 15;
+                this.baseSpeed = 1.5;
+                this.speed = this.baseSpeed + (levelMultiplier * 0.2); 
+                this.color = '#ff4444';
+                this.active = true;
+            }
+
+            update() {
+                if (!this.active || !player || isGamePaused) return;
+
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+
+                const vector = normalize(dx, dy);
+
+                this.x += vector.x * this.speed;
+                this.y += vector.y * this.speed;
+
+                // Check collision with player
+                if (dist(this.x, this.y, player.x, player.y) < this.size / 2 + player.radius) {
+                    gameOver();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, velocityX, velocityY) {
+                this.x = x;
+                this.y = y;
+                this.radius = PROJECTILE_SIZE;
+                this.vx = velocityX;
+                this.vy = velocityY;
+                this.color = '#ffffff';
+                this.active = true;
+            }
+
+            update() {
+                if (!this.active || isGamePaused) return;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Check boundaries
+                if (this.x < 0 || this.x > CANVAS_WIDTH || this.y < 0 || this.y > CANVAS_HEIGHT) {
+                    this.active = false;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // --- Game Logic ---
+
+        function initGame() {
+            isGameOver = false;
+            score = 0;
+            UI_SCORE.textContent = 0;
+            enemies = [];
+            projectiles = [];
+            lastEnemySpawnTime = 0;
+            
+            resizeCanvas(); 
+            
+            player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+            GAME_OVER_SCREEN.style.display = 'none';
+
+            if (gameLoopId) {
+                cancelAnimationFrame(gameLoopId);
+            }
+            lastUpdateTime = performance.now();
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function spawnEnemy(levelMultiplier) {
+            let x, y;
+            const buffer = 50;
+
+            const edge = Math.floor(Math.random() * 4); 
+
+            switch (edge) {
+                case 0: // Top
+                    x = Math.random() * CANVAS_WIDTH;
+                    y = -buffer;
+                    break;
+                case 1: // Bottom
+                    x = Math.random() * CANVAS_WIDTH;
+                    y = CANVAS_HEIGHT + buffer;
+                    break;
+                case 2: // Left
+                    x = -buffer;
+                    y = Math.random() * CANVAS_HEIGHT;
+                    break;
+                case 3: // Right
+                    x = CANVAS_WIDTH + buffer;
+                    y = Math.random() * CANVAS_HEIGHT;
+                    break;
+            }
+
+            enemies.push(new Enemy(x, y, levelMultiplier));
+        }
+
+        function checkCollisions() {
+            projectiles.forEach(p => {
+                if (!p.active) return;
+                
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    if (!e.active) continue;
+
+                    if (dist(p.x, p.y, e.x, e.y) < e.size / 2 + p.radius) {
+                        p.active = false;
+                        e.active = false;
+                        score++;
+                        UI_SCORE.textContent = score;
+                        break; 
+                    }
+                }
+            });
+
+            projectiles = projectiles.filter(p => p.active);
+            enemies = enemies.filter(e => e.active);
+        }
+        
+        function handleSpawningAndScaling(currentTime) {
+            const timeElapsed = currentTime - lastUpdateTime;
+            
+            const gameTimeSeconds = Math.floor(currentTime / 1000);
+            const levelMultiplier = Math.floor(gameTimeSeconds / 10); 
+
+            const spawnInterval = Math.max(300, baseEnemySpawnInterval - (gameTimeSeconds * 50));
+
+            if (currentTime - lastEnemySpawnTime > spawnInterval) {
+                spawnEnemy(levelMultiplier);
+                lastEnemySpawnTime = currentTime;
+            }
+        }
+
+        function updateGame(currentTime) {
+            if (isGameOver || isGamePaused) return;
+
+            handleSpawningAndScaling(currentTime);
+
+            player.update();
+            enemies.forEach(e => e.update());
+            projectiles.forEach(p => p.update());
+
+            checkCollisions();
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            projectiles.forEach(p => p.draw());
+            enemies.forEach(e => e.draw());
+            if (player) player.draw();
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            isGamePaused = true;
+            cancelAnimationFrame(gameLoopId);
+            
+            FINAL_SCORE.textContent = score;
+            GAME_OVER_SCREEN.style.display = 'flex';
+        }
+
+        function gameLoop(currentTime) {
+            if (!isGamePaused) {
+                updateGame(currentTime);
+                lastUpdateTime = currentTime; 
+            } 
+            drawGame(); 
+
+            if (!isGameOver) {
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        canvas.addEventListener('click', (event) => {
+            if (isGameOver || isGamePaused || !player) return;
+
+            const rect = canvas.getBoundingClientRect();
+            
+            // Get click coordinates relative to the dynamically sized canvas
+            const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
+            const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
+
+            const dx = mouseX - player.x;
+            const dy = mouseY - player.y;
+
+            const vector = normalize(dx, dy);
+
+            const p = new Projectile(
+                player.x + vector.x * (player.radius + 1), 
+                player.y + vector.y * (player.radius + 1),
+                vector.x * PROJECTILE_SPEED,
+                vector.y * PROJECTILE_SPEED
+            );
+            projectiles.push(p);
+        });
+
+        // Key Press Handling for smooth movement and pausing
+        document.addEventListener('keydown', (e) => {
+            if (e.key.toLowerCase() === 'escape') {
+                isGamePaused ? resumeGame() : pauseGame();
+            } else if (!isGamePaused) {
+                keys[e.key.toLowerCase()] = true;
+            }
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        RESTART_BUTTON.addEventListener('click', startGame);
+
+        // --- Initial Setup ---
+        resizeCanvas();
+        requestAnimationFrame(gameLoop); 
+    });
+</script>
+
 </body>
 </html>
 

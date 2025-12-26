@@ -141,12 +141,12 @@
         Score: <span id="scoreDisplay">0</span>
     </div>
     
-    <!-- NEW MENU OVERLAY -->
+    <!-- MENU OVERLAY: ONCLICK ATTRIBUTES REMOVED -->
     <div id="menu-overlay">
         <h2>Neon Grid Defender</h2>
-        <button id="btn-start" onclick="startGame()">Start Arena</button>
-        <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
-        <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+        <button id="btn-start">Start Arena</button>
+        <button id="btn-resume" style="display:none;">Resume</button>
+        <button id="btn-instructions">Instructions</button>
         <div id="instructions-box">
             <h3>Controls & Goal:</h3>
             <p><strong>Goal:</strong> Survive the enemy onslaught for as long as possible.</p>
@@ -177,10 +177,13 @@
         // Menu Elements
         const MENU_OVERLAY = document.getElementById('menu-overlay');
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        // Retrieve buttons for event listeners
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start'); 
+        const BTN_INSTRUCTIONS = document.getElementById('btn-instructions');
 
-        // --- Game Constants (These define the logic grid, now dynamic) ---
+
+        // --- Game Constants ---
         let CANVAS_WIDTH = window.innerWidth;
         let CANVAS_HEIGHT = window.innerHeight;
         const PLAYER_RADIUS = 10;
@@ -191,11 +194,14 @@
         let gameLoopId;
         let score = 0;
         let isGameOver = false;
-        let isGamePaused = true; // Start paused
+        let isGamePaused = true; 
         let keys = {};
-        let lastUpdateTime = 0;
+        
+        // Time tracking variables
+        let gameStartTime = 0;
         let lastEnemySpawnTime = 0;
         let baseEnemySpawnInterval = 2000; // ms
+
         let enemies = [];
         let projectiles = [];
         let player = null;
@@ -227,14 +233,15 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
         }
 
         function resumeGame() {
             if (isGameOver) return;
             isGamePaused = false;
             MENU_OVERLAY.style.display = 'none';
-            lastUpdateTime = performance.now();
-            requestAnimationFrame(gameLoop);
+            // When resuming, ensure the game loop restarts
+            gameLoopId = requestAnimationFrame(gameLoop);
         }
 
         function startGame() {
@@ -255,8 +262,7 @@
             return { x: dx / length, y: dy / length };
         }
 
-        // --- Entity Classes ---
-
+        // --- Entity Classes (omitted for brevity, assume they remain correct) ---
         class Player {
             constructor(x, y) {
                 this.x = x;
@@ -266,16 +272,14 @@
             }
 
             update() {
-                if (isGameOver || isGamePaused) return;
-
                 let dx = 0;
                 let dy = 0;
 
                 // WASD or Arrow Keys
-                if (keys['w'] || keys['ArrowUp']) dy -= 1;
-                if (keys['s'] || keys['ArrowDown']) dy += 1;
-                if (keys['a'] || keys['ArrowLeft']) dx -= 1;
-                if (keys['d'] || keys['ArrowRight']) dx += 1;
+                if (keys['w'] || keys['arrowup']) dy -= 1;
+                if (keys['s'] || keys['arrowdown']) dy += 1;
+                if (keys['a'] || keys['arrowleft']) dx -= 1;
+                if (keys['d'] || keys['arrowright']) dx += 1;
 
                 const vector = normalize(dx, dy);
 
@@ -307,7 +311,7 @@
             }
 
             update() {
-                if (!this.active || !player || isGamePaused) return;
+                if (!this.active || !player) return;
 
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
@@ -341,7 +345,7 @@
             }
 
             update() {
-                if (!this.active || isGamePaused) return;
+                if (!this.active) return;
                 this.x += this.vx;
                 this.y += this.vy;
 
@@ -367,7 +371,10 @@
             UI_SCORE.textContent = 0;
             enemies = [];
             projectiles = [];
-            lastEnemySpawnTime = 0;
+            
+            // Set initial timing
+            gameStartTime = performance.now();
+            lastEnemySpawnTime = gameStartTime;
             
             resizeCanvas(); 
             
@@ -377,14 +384,12 @@
             if (gameLoopId) {
                 cancelAnimationFrame(gameLoopId);
             }
-            lastUpdateTime = performance.now();
             gameLoopId = requestAnimationFrame(gameLoop);
         }
 
         function spawnEnemy(levelMultiplier) {
             let x, y;
             const buffer = 50;
-
             const edge = Math.floor(Math.random() * 4); 
 
             switch (edge) {
@@ -432,11 +437,12 @@
         }
         
         function handleSpawningAndScaling(currentTime) {
-            const timeElapsed = currentTime - lastUpdateTime;
+            const timeSinceStart = currentTime - gameStartTime;
+            const gameTimeSeconds = Math.floor(timeSinceStart / 1000);
             
-            const gameTimeSeconds = Math.floor(currentTime / 1000);
             const levelMultiplier = Math.floor(gameTimeSeconds / 10); 
 
+            // Spawn interval decreases over time
             const spawnInterval = Math.max(300, baseEnemySpawnInterval - (gameTimeSeconds * 50));
 
             if (currentTime - lastEnemySpawnTime > spawnInterval) {
@@ -446,8 +452,6 @@
         }
 
         function updateGame(currentTime) {
-            if (isGameOver || isGamePaused) return;
-
             handleSpawningAndScaling(currentTime);
 
             player.update();
@@ -468,7 +472,7 @@
         function gameOver() {
             isGameOver = true;
             isGamePaused = true;
-            cancelAnimationFrame(gameLoopId);
+            if (gameLoopId) cancelAnimationFrame(gameLoopId);
             
             FINAL_SCORE.textContent = score;
             GAME_OVER_SCREEN.style.display = 'flex';
@@ -477,7 +481,6 @@
         function gameLoop(currentTime) {
             if (!isGamePaused) {
                 updateGame(currentTime);
-                lastUpdateTime = currentTime; 
             } 
             drawGame(); 
 
@@ -488,12 +491,18 @@
 
         // --- Event Listeners ---
 
+        // 1. Game Buttons
+        BTN_START.addEventListener('click', startGame);
+        BTN_RESUME.addEventListener('click', resumeGame);
+        BTN_INSTRUCTIONS.addEventListener('click', toggleInstructions);
+        RESTART_BUTTON.addEventListener('click', startGame);
+        
+        // 2. Canvas Interaction
         canvas.addEventListener('click', (event) => {
             if (isGameOver || isGamePaused || !player) return;
 
             const rect = canvas.getBoundingClientRect();
             
-            // Get click coordinates relative to the dynamically sized canvas
             const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
 
@@ -511,20 +520,20 @@
             projectiles.push(p);
         });
 
-        // Key Press Handling for smooth movement and pausing
+        // 3. Key Press Handling
         document.addEventListener('keydown', (e) => {
-            if (e.key.toLowerCase() === 'escape') {
+            const key = e.key.toLowerCase();
+            if (key === 'escape') {
+                e.preventDefault(); 
                 isGamePaused ? resumeGame() : pauseGame();
             } else if (!isGamePaused) {
-                keys[e.key.toLowerCase()] = true;
+                keys[key] = true;
             }
         });
 
         document.addEventListener('keyup', (e) => {
             keys[e.key.toLowerCase()] = false;
         });
-
-        RESTART_BUTTON.addEventListener('click', startGame);
 
         // --- Initial Setup ---
         resizeCanvas();
