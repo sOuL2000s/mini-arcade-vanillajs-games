@@ -22,7 +22,11 @@
             flex-direction: column;
             align-items: center;
             background-color: #f4f7f6;
-            margin: 20px;
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            width: 100vw;
+            overflow: auto; 
         }
 
         h1 {
@@ -31,8 +35,8 @@
         }
 
         #info-bar {
-            width: 100%;
-            max-width: calc(var(--grid-size) * var(--cell-size));
+            width: 90%; 
+            max-width: 500px;
             display: flex;
             justify-content: space-between;
             margin-bottom: 15px;
@@ -49,17 +53,18 @@
             border: 4px solid #34495e;
             box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
             transition: all 0.5s ease;
+            max-width: 90vw;
+            max-height: 80vh;
         }
         
-        /* RESPONSIVENESS: Shrink grid and font size if grid is too big for the viewport (especially mobile) */
         @media (max-width: 600px) {
             :root {
-                --cell-size: 30px; /* Smaller cells on small screens */
+                --cell-size: 30px; 
             }
         }
         @media (max-width: 450px) {
              :root {
-                --cell-size: 25px; /* Even smaller cells */
+                --cell-size: 25px; 
                 --pipe-thickness: 6px;
             }
             h1 {
@@ -80,8 +85,56 @@
             cursor: pointer;
             transition: transform 0.2s ease-out, background-color 0.5s;
         }
+        
+        /* --- MENU OVERLAY STYLES --- */
+        #menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            display: flex; 
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 600; 
+            font-size: 1.5em;
+        }
 
-        /* Pipe Visualization using Pseudo-elements */
+        #menu-overlay h2 {
+            color: #3498db;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        #menu-overlay button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #3498db;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        #instructions-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            max-width: 80%;
+            font-size: 0.7em;
+            text-align: left;
+            display: none;
+        }
+        
+        /* ... Pipe visualization styles follow ... */
+
         .pipe-visual {
             position: absolute;
             top: 0;
@@ -90,7 +143,6 @@
             height: 100%;
         }
 
-        /* Center Dot (Always present for pipes) */
         .pipe-visual::before {
             content: '';
             position: absolute;
@@ -104,31 +156,28 @@
             z-index: 2;
         }
 
-        /* Pipe Segments - Use borders to simulate pipes */
-        .cell[data-type="1"] .pipe-visual { /* Straight */
+        .cell[data-type="1"] .pipe-visual { 
             border-left: var(--pipe-thickness) solid var(--pipe-color);
             border-right: var(--pipe-thickness) solid var(--pipe-color);
-            transform: rotate(90deg); /* Base Vertical */
+            transform: rotate(90deg); 
         }
-        .cell[data-type="2"] .pipe-visual { /* Corner */
+        .cell[data-type="2"] .pipe-visual { 
             border-top: var(--pipe-thickness) solid var(--pipe-color);
             border-right: var(--pipe-thickness) solid var(--pipe-color);
         }
-        .cell[data-type="3"] .pipe-visual { /* T-Junction */
+        .cell[data-type="3"] .pipe-visual { 
             border-top: var(--pipe-thickness) solid var(--pipe-color);
             border-right: var(--pipe-thickness) solid var(--pipe-color);
             border-left: var(--pipe-thickness) solid var(--pipe-color);
         }
-        .cell[data-type="4"] .pipe-visual { /* Cross */
+        .cell[data-type="4"] .pipe-visual { 
             border: var(--pipe-thickness) solid var(--pipe-color);
         }
 
-        /* Pipe Rotation Handled by JS inline style */
         .cell[data-rotation] .pipe-visual {
             transform-origin: center center;
         }
 
-        /* Start and End Markers */
         .cell.start {
             background-color: var(--start-color);
             border-color: var(--start-color);
@@ -148,7 +197,6 @@
             font-weight: bold;
         }
 
-        /* Solved State Feedback */
         .cell.on-path .pipe-visual::before {
             background-color: var(--solved-path-color);
         }
@@ -185,6 +233,22 @@
     <div id="message" class="message">
         Puzzle Solved! Generating next level...
     </div>
+    
+    <!-- NEW MENU OVERLAY -->
+    <div id="menu-overlay">
+        <h2>Circuit Flow</h2>
+        <button id="btn-start" onclick="resumeGame()">Start Puzzle</button>
+        <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
+        <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+        <div id="instructions-box">
+            <h3>Controls & Goal:</h3>
+            <p><strong>Goal:</strong> Rotate the pipe pieces so they form a continuous circuit connecting the Start (S) to the End (E).</p>
+            <p><strong>Rotate:</strong> Click a pipe segment to rotate it 90 degrees clockwise.</p>
+            <p>Score increases every time a puzzle is solved. The grid size increases every few levels, boosting difficulty.</p>
+            <p>Press ESC to pause/resume the game.</p>
+        </div>
+    </div>
+
 
     <script>
         // --- GLOBAL STATE ---
@@ -194,9 +258,10 @@
         let grid = [];
         let startCell = { r: 0, c: 0 };
         let endCell = { r: 0, c: 0 };
+        let isGamePaused = true; // Start paused
         const GRID_CONTAINER = document.getElementById('game-grid');
         
-        // Pipe Connections: [N, E, S, W] (True means open)
+        // Pipe Connections: [N, E, S, W] 
         const PIPE_MAP = {
             0: { id: 0, connections: [false, false, false, false], css: 'pipe-block' },
             1: { id: 1, connections: [true, false, true, false], css: 'pipe-straight' },
@@ -211,12 +276,33 @@
             { r: 1, c: 0, index: 2, opposite: 0 },  // South
             { r: 0, c: -1, index: 3, opposite: 1 }   // West
         ];
+        
+        // Menu Elements
+        const MENU_OVERLAY = document.getElementById('menu-overlay');
+        const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        const BTN_RESUME = document.getElementById('btn-resume');
+        const BTN_START = document.getElementById('btn-start');
+
+        // --- Menu Logic ---
+        function toggleInstructions() {
+            INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function resumeGame() {
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+        }
+
+        function pauseGame() {
+            isGamePaused = true;
+            MENU_OVERLAY.style.display = 'flex';
+            BTN_START.style.display = 'none';
+            BTN_RESUME.style.display = 'block'; 
+            INSTRUCTIONS_BOX.style.display = 'none';
+        }
 
         // --- UTILITY FUNCTIONS ---
 
-        /**
-         * Rotates the connection array clockwise by R steps (0, 1, 2, 3).
-         */
         function rotateConnections(connections, rotation) {
             if (rotation === 0) return connections;
             
@@ -230,9 +316,6 @@
             return rotated;
         }
 
-        /**
-         * Get the current effective connections for a cell based on its type and rotation.
-         */
         function getCurrentConnections(cell) {
             const baseConnections = PIPE_MAP[cell.type].connections;
             return rotateConnections(baseConnections, cell.rotation);
@@ -248,10 +331,10 @@
 
         // --- GENERATION LOGIC ---
         function generatePuzzle() {
+            // ... (Generation logic remains the same) ...
             grid = [];
             moves = 0;
             
-            // 1. Initialize Grid
             for (let r = 0; r < GRID_SIZE; r++) {
                 grid[r] = [];
                 for (let c = 0; c < GRID_SIZE; c++) {
@@ -265,10 +348,9 @@
                 }
             }
 
-            // 2. Define Start and End Points (Force Start/End to be on opposite edges)
             const edgePairs = [
-                [{r: 0, c: getRandomInt(GRID_SIZE)}, {r: GRID_SIZE - 1, c: getRandomInt(GRID_SIZE)}], // Top/Bottom
-                [{r: getRandomInt(GRID_SIZE), c: 0}, {r: getRandomInt(GRID_SIZE), c: GRID_SIZE - 1}]  // Left/Right
+                [{r: 0, c: getRandomInt(GRID_SIZE)}, {r: GRID_SIZE - 1, c: getRandomInt(GRID_SIZE)}], 
+                [{r: getRandomInt(GRID_SIZE), c: 0}, {r: getRandomInt(GRID_SIZE), c: GRID_SIZE - 1}] 
             ];
             
             const chosenPair = edgePairs[getRandomInt(2)];
@@ -284,14 +366,12 @@
             const pathHistory = [{ r: currentR, c: currentC }];
             const minPathLength = Math.floor(GRID_SIZE * 1.5);
             
-            // 3. Generate the winding path using Randomized DFS
             while (currentR !== endCell.r || currentC !== endCell.c) {
                 const isNearEnd = Math.abs(endCell.r - currentR) + Math.abs(endCell.c - currentC) <= 2;
                 
                 let potentialMoves = DIRS.map((dir, index) => ({ dir, index }))
                     .filter(({ dir }) => isInsideGrid(currentR + dir.r, currentC + dir.c));
                 
-                // Prioritize moving towards the end point if the path is long enough or near the end
                 if (pathLength >= minPathLength || isNearEnd) {
                     potentialMoves.sort((a, b) => {
                         const distA = Math.hypot(endCell.r - (currentR + a.dir.r), endCell.c - (currentC + a.dir.c));
@@ -305,32 +385,26 @@
                     const nextR = currentR + move.dir.r;
                     const nextC = currentC + move.dir.c;
                     
-                    // Do not step on existing path segments unless we are reaching the final cell
                     if (grid[nextR][nextC].isPath && (nextR !== endCell.r || nextC !== endCell.c)) {
                         continue;
                     }
 
-                    // Look ahead: Ensure the chosen move doesn't lead into a dead end immediately (optional, hard to implement fully)
-                    
                     nextMove = move;
                     break;
                 }
 
                 if (!nextMove) {
-                    // Backtrack (if not at min length, but skipping complex DFS backtracking for minimalism)
                     break;
                 }
 
                 const { dir: chosenDir, index: exitDirIndex } = nextMove;
                 const nextR = currentR + chosenDir.r;
                 const nextC = currentC + chosenDir.c;
-                const nextCell = grid[nextR][nextC];
                 
                 const prevCell = pathHistory[pathHistory.length - 1];
                 let prevDirIndex = -1;
                 
                 if (pathHistory.length > 0) {
-                    // Find which direction index connects prev to current
                     for(let i=0; i<4; i++) {
                         if (prevCell.r + DIRS[i].r === currentR && prevCell.c + DIRS[i].c === currentC) {
                             prevDirIndex = i;
@@ -342,30 +416,24 @@
                 let pipeType;
                 let finalRotation = 0;
                 
-                if (pathHistory.length === 1) { // First piece after Start
-                    pipeType = 1; // Start with a straight pipe
-                    finalRotation = (exitDirIndex % 2 === 0) ? 1 : 0; // 1: V (N/S), 0: H (E/W)
+                if (pathHistory.length === 1) { 
+                    pipeType = 1; 
                     if (exitDirIndex === 1) finalRotation = 0; 
-                    if (exitDirIndex === 3) finalRotation = 2; 
-                    if (exitDirIndex === 0) finalRotation = 3; 
-                    if (exitDirIndex === 2) finalRotation = 1; 
+                    else if (exitDirIndex === 3) finalRotation = 2; 
+                    else if (exitDirIndex === 0) finalRotation = 3; 
+                    else if (exitDirIndex === 2) finalRotation = 1; 
                     
-                } else if (nextR === endCell.r && nextC === endCell.c) { // Final piece connecting to End
+                } else if (nextR === endCell.r && nextC === endCell.c) { 
                     pipeType = 1;
-                    finalRotation = (prevDirIndex % 2 === 0) ? 1 : 0;
                     if (prevDirIndex === 1) finalRotation = 0; 
-                    if (prevDirIndex === 3) finalRotation = 2; 
-                    if (prevDirIndex === 0) finalRotation = 3; 
-                    if (prevDirIndex === 2) finalRotation = 1; 
+                    else if (prevDirIndex === 3) finalRotation = 2; 
+                    else if (prevDirIndex === 0) finalRotation = 3; 
+                    else if (prevDirIndex === 2) finalRotation = 1; 
                 } else {
-                    // Middle piece: Must connect entry (prevDirIndex opposite) to exit (exitDirIndex)
-                    pipeType = 2; // Assume corner initially
-
-                    // Try Corner pipes (Type 2)
+                    pipeType = 2; 
                     let attempts = 0;
                     while(attempts < 4) {
                         const connections = rotateConnections(PIPE_MAP[2].connections, attempts);
-                        // Check if entry (opposite of prevDir) and exit are connected
                         if (connections[DIRS[prevDirIndex].opposite] && connections[exitDirIndex]) {
                             pipeType = 2;
                             finalRotation = attempts;
@@ -375,7 +443,6 @@
                     }
                     
                     if (attempts === 4) {
-                         // Fallback to T-Junction if a corner doesn't work (for complex turns)
                          pipeType = 3;
                          attempts = 0;
                          while(attempts < 4) {
@@ -399,31 +466,24 @@
                 pathLength++;
             }
             
-            // 4. Fill remaining cells (distractors)
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
                     const cell = grid[r][c];
                     if (!cell.isPath) {
-                        cell.type = getRandomInt(3) + 1; // 1, 2, or 3
+                        cell.type = getRandomInt(3) + 1; 
                         cell.initialPathRotation = getRandomInt(4);
                     }
                     
-                    // 5. Scramble the puzzle: apply random rotation
-                    // Ensure the Start/End neighbor has its correct initialPathRotation set, 
-                    // and we only scramble the other cells.
                     if ((r === startCell.r && c === startCell.c) || (r === endCell.r && c === endCell.c)) {
                          // Skip start/end markers
                     } else if(cell.isPath) {
-                        // Scramble the main path pieces
                         cell.rotation = getRandomInt(4);
                     } else {
-                        // Scramble distractors
                         cell.rotation = getRandomInt(4);
                     }
                 }
             }
             
-            // Set types to 0 for special rendering of Start/End markers
             grid[startCell.r][startCell.c].type = 0; 
             grid[endCell.r][endCell.c].type = 0;
 
@@ -433,18 +493,19 @@
         // --- VALIDATION LOGIC (Path Tracing) ---
         
         function checkWin() {
+            if (isGamePaused) return false;
+            // ... (rest of checkWin logic remains the same) ...
+            
             const visited = new Set();
             const pathCells = [];
             
             const startR = startCell.r;
             const startC = startCell.c;
             
-            // Find the true first path piece neighbor and the required entry direction
             let requiredExitDirIndex = -1;
             for(let i=0; i<DIRS.length; i++) {
                 const neighborR = startR + DIRS[i].r;
                 const neighborC = startC + DIRS[i].c;
-                // Look for the first path piece (which is *not* the end marker)
                 if (isInsideGrid(neighborR, neighborC) && grid[neighborR][neighborC].isPath && (neighborR !== endCell.r || neighborC !== endCell.c)) {
                     requiredExitDirIndex = i;
                     break;
@@ -472,17 +533,14 @@
                     break; 
                 }
                 
-                // If we hit a non-path piece, we stop the trace here
                 if (!cell.isPath) break;
 
                 const connections = getCurrentConnections(cell);
 
-                // 1. Check if the current pipe accepts entry
                 if (!connections[currentEntryDir]) {
                     break;
                 }
 
-                // 2. Find the single exit direction (for non-cross pieces)
                 let exitDirIndex = -1;
                 for (let i = 0; i < 4; i++) {
                     if (i !== currentEntryDir && connections[i]) {
@@ -492,8 +550,6 @@
                 }
 
                 if (exitDirIndex === -1) {
-                    // Dead end or cross/T junction needs further validation
-                    // For single-path puzzles, this means an incorrect rotation.
                     break;
                 }
 
@@ -504,27 +560,24 @@
                     const nextCell = grid[nextR][nextC];
                     const requiredEntryIndex = DIRS[exitDirIndex].opposite;
 
-                    // 3. Check if the next pipe accepts entry
                     const nextConnections = getCurrentConnections(nextCell);
                     
                     if (nextR === endCell.r && nextC === endCell.c) {
-                        // Reached the end marker, successful trace if it links
                         successfulTrace = true;
                         break;
                     }
                     
                     if (nextConnections[requiredEntryIndex]) {
-                        // Successful link, continue trace
                         if (!visited.has(`${nextR},${nextC}`)) {
                             visited.add(`${nextR},${nextC}`);
                             pathCells.push(nextCell);
                             traceQueue.push({ r: nextR, c: nextC, entryDir: requiredEntryIndex });
                         }
                     } else {
-                        break; // Next pipe rotated wrong
+                        break; 
                     }
                 } else {
-                    break; // Path goes off grid
+                    break; 
                 }
             }
             
@@ -553,6 +606,8 @@
         // --- RENDER & INPUT ---
 
         function handleCellClick(r, c) {
+            if (isGamePaused) return; 
+
             const cell = grid[r][c];
             if (cell.type === 0) return;
             
@@ -564,7 +619,7 @@
             if (element) {
                 const pipeVisual = element.querySelector('.pipe-visual');
                 pipeVisual.style.transform = `rotate(${cell.rotation * 90}deg)`;
-                element.classList.remove('on-path'); // Remove highlights if rotated
+                element.classList.remove('on-path'); 
             }
 
             checkWin();
@@ -623,7 +678,17 @@
             document.getElementById('moves-display').textContent = moves;
             
             generatePuzzle();
+            
+            pauseGame(); 
+            BTN_START.style.display = 'block';
+            BTN_RESUME.style.display = 'none';
         }
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                isGamePaused ? resumeGame() : pauseGame();
+            }
+        });
 
         initGame();
     </script>

@@ -80,7 +80,6 @@
 
         /* --- Game Container (Iframe View) --- */
         #game-view-container {
-            /* Initial display: none is set by JS */
             width: 100vw;
             height: 100vh;
             position: fixed;
@@ -98,16 +97,12 @@
         }
         
         #game-frame {
-            /* These sizes are overridden by JS on load, set here as fallback/max */
-            width: 800px; 
-            height: 600px;
+            /* These sizes are the native resolution used for scaling calculation */
             border: 4px solid #00ff80;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0, 255, 128, 0.5);
             background-color: #000;
             transform-origin: center center;
-            max-width: 100%;
-            max-height: 100%;
             transition: transform 0.2s ease;
         }
         
@@ -125,7 +120,7 @@
             font-weight: bold;
             cursor: pointer;
             transition: background-color 0.2s, transform 0.1s;
-            z-index: 100;
+            z-index: 501;
         }
         
         /* --- Media Queries for Mobile Layout --- */
@@ -157,7 +152,7 @@
 
     <header>
         <h1>Mini Arcade Mania</h1>
-        <p>10 vanilla JavaScript challenges built for precision and survival.</p>
+        <p>11 vanilla JavaScript challenges built for precision and survival.</p>
     </header>
 
     <!-- ARCADE GRID VIEW -->
@@ -172,18 +167,21 @@
     </div>
 
     <script>
-        // Updated list with new names and dimensions
+        const COMMON_NATIVE_WIDTH = 1200;
+        const COMMON_NATIVE_HEIGHT = 800;
+        
         const GAMES = [
-            { title: "Neon Grid Defender", file: "ai-survival-arena.html", subtitle: "Twin-stick shooter vs. aggressive AI cubes", width: 800, height: 600 },
-            { title: "Starfall Dodgem", file: "bullet-hell-survival.html", subtitle: "Dodge endless geometric projectile patterns", width: 800, height: 600 },
-            { title: "The Pixel Dash", file: "endless-runner.html", subtitle: "Jump the gaps, scale the speed", width: 800, height: 250 },
-            { title: "Minimal Metropolis", file: "infinite-city-builder.html", subtitle: "Minimalist grid zoning simulator", width: 800, height: 600 },
-            { title: "Gravity Glide", file: "infinite-parkour-platformer.html", subtitle: "Procedurally generated jumps (Full Screen)", width: 1200, height: 800 },
-            { title: "Void Runner", file: "infinite-space-survival.html", subtitle: "Navigate asteroid fields (Full Screen)", width: 1200, height: 800 },
-            { title: "Vector Clicker", file: "precision-aim-trainer.html", subtitle: "Targets shrink and speed up (Full Screen)", width: 1200, height: 800 },
-            { title: "Circuit Flow", file: "procedural-pipe-connect.html", subtitle: "Rotate pipes to complete the circuit", width: 800, height: 600 },
-            { title: "Hyper-Click", file: "reaction-time-challenge.html", subtitle: "Click fast or click wrong, you lose! (Full Screen)", width: 1200, height: 800 },
-            { title: "Coiled Destiny", file: "snake-game.html", subtitle: "Classic game with continuous difficulty", width: 400, height: 400 }
+            { title: "Neon Grid Defender", file: "ai-survival-arena.html", subtitle: "Twin-stick shooter vs. aggressive AI cubes", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Starfall Dodgem", file: "bullet-hell-survival.html", subtitle: "Dodge endless geometric projectile patterns", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "The Pixel Dash", file: "endless-runner.html", subtitle: "Jump the gaps, scale the speed", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Self Chess", file: "self-chess.html", subtitle: "Play both sides on a rotating, elegant board.", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Minimal Metropolis", file: "infinite-city-builder.html", subtitle: "Minimalist grid zoning simulator", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Gravity Glide", file: "infinite-parkour-platformer.html", subtitle: "Procedurally generated jumps (Full Screen)", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Void Runner", file: "infinite-space-survival.html", subtitle: "Navigate asteroid fields (Full Screen)", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Vector Clicker", file: "precision-aim-trainer.html", subtitle: "Targets shrink and speed up (Full Screen)", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Circuit Flow", file: "procedural-pipe-connect.html", subtitle: "Rotate pipes to complete the circuit", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Hyper-Click", file: "reaction-time-challenge.html", subtitle: "Click fast or click wrong, you lose! (Full Screen)", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT },
+            { title: "Coiled Destiny", file: "snake-game.html", subtitle: "Classic game with continuous difficulty", width: COMMON_NATIVE_WIDTH, height: COMMON_NATIVE_HEIGHT }
         ];
 
         const gridEl = document.getElementById('arcade-grid');
@@ -222,7 +220,6 @@
          * based on the game's native size and the current viewport size.
          */
         function scaleGameFrame() {
-            // Find the game data based on the currently loaded iframe source
             const currentSrc = gameFrameEl.src.split('/').pop();
             const gameData = GAMES.find(g => g.file === currentSrc);
             
@@ -231,8 +228,6 @@
             const nativeWidth = gameData.width;
             const nativeHeight = gameData.height;
 
-            // Get available viewport space (account for button and padding)
-            // Use 100% of viewport minus padding (20px left/right, 20px top/bottom)
             const viewportWidth = window.innerWidth - 40; 
             const viewportHeight = window.innerHeight - 40; 
 
@@ -240,8 +235,7 @@
             const scaleX = viewportWidth / nativeWidth;
             const scaleY = viewportHeight / nativeHeight;
             
-            // Choose the smaller scale factor, capped at 1 (to prevent upscaling beyond native res)
-            const scaleFactor = Math.min(1, scaleX, scaleY);
+            const scaleFactor = Math.min(scaleX, scaleY);
             
             // 1. Set the iframe's *native* dimensions (unscaled size)
             gameFrameEl.style.width = `${nativeWidth}px`;
@@ -267,7 +261,7 @@
             // Show the game container immediately
             gameViewContainerEl.style.display = 'flex';
             
-            // Adjust scaling right after loading the source (needs a slight delay for dimensions to update)
+            // Adjust scaling right after loading the source 
             setTimeout(scaleGameFrame, 10);
 
             // Focus the iframe for immediate key/mouse input

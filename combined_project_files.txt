@@ -6,7 +6,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Survival Arena</title>
+    <title>Neon Grid Defender</title>
     <style>
         body {
             display: flex;
@@ -17,17 +17,23 @@
             background-color: #1a1a1a;
             font-family: sans-serif;
             overflow: hidden;
+            /* Ensure the game area itself is fixed to its desired aspect ratio */
         }
 
         #gameContainer {
             position: relative;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
             border: 2px solid #00ffff;
+            /* Fixed dimensions handled by parent iframe scaling */
+            width: 800px; 
+            height: 600px;
         }
 
         #gameCanvas {
             display: block;
             background-color: #000000;
+            width: 100%;
+            height: 100%;
         }
 
         #uiOverlay {
@@ -36,7 +42,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* Allows mouse clicks to pass through */
+            pointer-events: none;
             color: #00ffff;
             padding: 10px;
             box-sizing: border-box;
@@ -57,8 +63,8 @@
             align-items: center;
             text-align: center;
             font-size: 30px;
-            display: none; /* Hidden initially */
-            pointer-events: all; /* Important to allow restart button clicks */
+            display: none;
+            pointer-events: all;
         }
 
         #restartButton {
@@ -81,6 +87,7 @@
 <body>
 
 <div id="gameContainer">
+    <!-- Canvas dimensions are set by container and CSS, but logic uses fixed 800x600 constants -->
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <div id="uiOverlay">
         Score: <span id="scoreDisplay">0</span>
@@ -103,9 +110,9 @@
         const FINAL_SCORE = document.getElementById('finalScore');
         const RESTART_BUTTON = document.getElementById('restartButton');
 
-        // --- Game Constants ---
-        const CANVAS_WIDTH = canvas.width;
-        const CANVAS_HEIGHT = canvas.height;
+        // --- Game Constants (These define the logic grid, fixed at 800x600) ---
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
         const PLAYER_RADIUS = 10;
         const PROJECTILE_SPEED = 8;
         const PROJECTILE_SIZE = 2;
@@ -381,8 +388,10 @@
 
             // Get mouse position relative to canvas
             const rect = canvas.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
+            
+            // Scaling correction: Calculate the mouse position relative to the 800x600 logical grid
+            const mouseX = (event.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+            const mouseY = (event.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
 
             // Calculate direction vector from player to mouse
             const dx = mouseX - player.x;
@@ -429,7 +438,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bullet Hell Survival</title>
+    <title>Starfall Dodgem</title>
     <!-- All required CSS, structure, and JS are contained in this single file -->
 </head>
 <body>
@@ -449,11 +458,16 @@
     #game-container {
         position: relative;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        /* Fixed dimensions handled by parent iframe scaling */
+        width: 800px;
+        height: 600px;
     }
     canvas {
         display: block;
         background-color: #000;
         border: 2px solid #333;
+        width: 100%;
+        height: 100%;
     }
     #ui-overlay {
         position: absolute;
@@ -506,7 +520,7 @@
         Score: <span id="score-display">0</span> ms | Bullets: <span id="bullet-count">0</span>
         <div style="float: right;">Movement: WASD / Arrows</div>
     </div>
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <div id="game-over-screen">
         <h1>GAME OVER</h1>
@@ -524,7 +538,8 @@
     // --- Game State Variables ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = CANVAS_WIDTH;
+    // Canvas buffer sizes are fixed for consistent game logic
+    canvas.width = CANVAS_WIDTH; 
     canvas.height = CANVAS_HEIGHT;
 
     let gameRunning = false;
@@ -644,7 +659,7 @@
             bullet.x += bullet.dx;
             bullet.y += bullet.dy;
 
-            // Collision Check (Distance squared for speed optimization, though Math.hypot is often faster in modern JS)
+            // Collision Check
             const dist = Math.hypot(player.x - bullet.x, player.y - bullet.y);
             
             if (dist < player.radius + bullet.radius) {
@@ -663,7 +678,7 @@
     }
 
     function updateDifficulty() {
-        // Difficulty scales by 0.1 every 5 seconds (300 frames at 60 FPS)
+        // Difficulty scales by 0.15 every 5 seconds
         const elapsedSeconds = (performance.now() - startTime) / 1000;
         difficultyMultiplier = 1.0 + (elapsedSeconds / 5) * 0.15;
     }
@@ -740,8 +755,7 @@
         ctx.fillStyle = player.color;
         ctx.fill();
         
-        // Draw Bullets (Optimized for drawing many circles)
-        // Group all drawing operations for performance
+        // Draw Bullets
         ctx.fillStyle = '#FF4444'; 
         for (const bullet of bullets) {
             ctx.beginPath();
@@ -791,7 +805,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Vanilla JS Endless Runner</title>
+    <title>The Pixel Dash</title>
     <style>
         /* Global Styles */
         body {
@@ -805,7 +819,7 @@
             overflow: hidden;
         }
 
-        /* Game Container Styling */
+        /* Game Container Styling (Fixed 800x250 aspect ratio) */
         #game-container {
             width: 800px;
             height: 250px;
@@ -813,7 +827,7 @@
             background-color: #87ceeb; /* Sky */
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
             position: relative;
-            overflow: hidden; /* Crucial for clipping obstacles */
+            overflow: hidden;
             cursor: pointer;
         }
 
@@ -824,7 +838,7 @@
             left: 0;
             width: 100%;
             height: 20px;
-            background-color: #2e8b57; /* Darker Green */
+            background-color: #2e8b57;
             border-top: 3px solid #1e623a;
         }
 
@@ -834,7 +848,7 @@
             width: 30px;
             height: 30px;
             background-color: #ff4500;
-            bottom: 20px; /* Starts on the ground */
+            bottom: 20px;
             left: 50px;
             border: 2px solid #a03000;
             z-index: 10;
@@ -861,7 +875,7 @@
             height: 100%;
             background-color: rgba(0, 0, 0, 0.7);
             color: white;
-            display: none; /* Hidden by default */
+            display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -1166,7 +1180,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Code Core Arcade</title>
+    <title>Mini Arcade Mania</title>
     <style>
         /* --- General & Reset --- */
         body, html {
@@ -1243,48 +1257,35 @@
 
         /* --- Game Container (Iframe View) --- */
         #game-view-container {
-            display: none; 
+            /* Initial display: none is set by JS */
             width: 100vw;
-            height: calc(100vh - 80px); /* Account for header height */
+            height: 100vh;
             position: fixed;
-            top: 80px; /* Below the header */
+            top: 0;
             left: 0;
             background-color: #121212;
             
-            /* Use Flexbox to center the game view */
             display: flex;
+            flex-direction: column;
             justify-content: center;
             align-items: center;
             padding: 20px;
             box-sizing: border-box;
-            z-index: 500; /* Ensure it stays above everything */
-            
-            /* Initially hidden via JS setting display: none */
+            z-index: 500;
         }
         
         #game-frame {
-            /* We treat the iframe as a window for the fixed-size game (e.g., 800x600) */
+            /* These sizes are overridden by JS on load, set here as fallback/max */
             width: 800px; 
             height: 600px;
             border: 4px solid #00ff80;
             border-radius: 10px;
             box-shadow: 0 0 20px rgba(0, 255, 128, 0.5);
             background-color: #000;
-            
-            /* 1. Ensure it fits within the viewport */
+            transform-origin: center center;
             max-width: 100%;
             max-height: 100%;
-
-            /* 2. Use scaling for responsiveness on small screens */
-            transform-origin: center center;
-            
-            /* Crucial: Scale down the iframe if its native size exceeds the available space */
-            transform: scale(
-                min(1, 
-                    calc((100vw - 40px) / 800), /* Maximize based on width */
-                    calc((100vh - 150px) / 600)  /* Maximize based on height (minus button/padding) */
-                )
-            );
+            transition: transform 0.2s ease;
         }
         
         /* --- Back Button --- */
@@ -1314,23 +1315,11 @@
                 font-size: 0.9em;
             }
             #arcade-grid {
-                grid-template-columns: 1fr; /* Single column on mobile */
+                grid-template-columns: 1fr;
                 gap: 20px;
                 padding: 20px 10px;
             }
-            .game-card h2 {
-                font-size: 1.3em;
-            }
 
-            /* Adjust game frame max sizes for very small screens */
-            #game-frame {
-                /* The CSS transform logic handles the scaling automatically, 
-                   but we ensure the container sizes are responsive */
-                width: 100%; 
-                height: 100%;
-            }
-            
-            /* Move back button slightly for better mobile reach */
             #back-button {
                 top: 5px;
                 right: 5px;
@@ -1344,7 +1333,7 @@
 <body>
 
     <header>
-        <h1>The Code Core Arcade</h1>
+        <h1>Mini Arcade Mania</h1>
         <p>10 vanilla JavaScript challenges built for precision and survival.</p>
     </header>
 
@@ -1354,25 +1343,24 @@
     </div>
 
     <!-- GAME VIEW CONTAINER (Iframe) -->
-    <!-- Note: This container is initially 'hidden' by the JS when the page loads, 
-         but we set its fixed position/size in CSS -->
     <div id="game-view-container" style="display: none;">
         <button id="back-button" onclick="unloadGame()">← Back to Arcade</button>
         <iframe id="game-frame" frameborder="0"></iframe>
     </div>
 
     <script>
+        // Updated list with new names and dimensions
         const GAMES = [
-            { title: "AI Survival Arena", file: "ai-survival-arena.html", subtitle: "Twin-stick shooter vs. AI cubes", width: 800, height: 600 },
-            { title: "Bullet Hell Survival", file: "bullet-hell-survival.html", subtitle: "Dodge endless geometric patterns", width: 800, height: 600 },
-            { title: "Vanilla JS Endless Runner", file: "endless-runner.html", subtitle: "Jump the gaps, scale the speed", width: 800, height: 250 },
-            { title: "Infinite City Builder", file: "infinite-city-builder.html", subtitle: "Minimalist grid zoning simulator", width: 800, height: 600 },
-            { title: "Infinite Parkour Platformer", file: "infinite-parkour-platformer.html", subtitle: "Procedurally generated jumps", width: 800, height: 600 },
-            { title: "Infinite Space Survival", file: "infinite-space-survival.html", subtitle: "Navigate asteroid fields", width: 800, height: 600 },
-            { title: "Precision Aim Trainer", file: "precision-aim-trainer.html", subtitle: "Targets shrink and speed up", width: 800, height: 600 },
-            { title: "Pipe Connect Puzzle Generator", file: "procedural-pipe-connect.html", subtitle: "Rotate pipes to complete the circuit", width: 800, height: 600 },
-            { title: "Reaction Time Challenge", file: "reaction-time-challenge.html", subtitle: "Click fast or click wrong, you lose!", width: 800, height: 600 },
-            { title: "The Infinite Snake", file: "snake-game.html", subtitle: "Classic game with continuous difficulty", width: 400, height: 400 }
+            { title: "Neon Grid Defender", file: "ai-survival-arena.html", subtitle: "Twin-stick shooter vs. aggressive AI cubes", width: 800, height: 600 },
+            { title: "Starfall Dodgem", file: "bullet-hell-survival.html", subtitle: "Dodge endless geometric projectile patterns", width: 800, height: 600 },
+            { title: "The Pixel Dash", file: "endless-runner.html", subtitle: "Jump the gaps, scale the speed", width: 800, height: 250 },
+            { title: "Minimal Metropolis", file: "infinite-city-builder.html", subtitle: "Minimalist grid zoning simulator", width: 800, height: 600 },
+            { title: "Gravity Glide", file: "infinite-parkour-platformer.html", subtitle: "Procedurally generated jumps (Full Screen)", width: 1200, height: 800 },
+            { title: "Void Runner", file: "infinite-space-survival.html", subtitle: "Navigate asteroid fields (Full Screen)", width: 1200, height: 800 },
+            { title: "Vector Clicker", file: "precision-aim-trainer.html", subtitle: "Targets shrink and speed up (Full Screen)", width: 1200, height: 800 },
+            { title: "Circuit Flow", file: "procedural-pipe-connect.html", subtitle: "Rotate pipes to complete the circuit", width: 800, height: 600 },
+            { title: "Hyper-Click", file: "reaction-time-challenge.html", subtitle: "Click fast or click wrong, you lose! (Full Screen)", width: 1200, height: 800 },
+            { title: "Coiled Destiny", file: "snake-game.html", subtitle: "Classic game with continuous difficulty", width: 400, height: 400 }
         ];
 
         const gridEl = document.getElementById('arcade-grid');
@@ -1403,7 +1391,6 @@
             });
             gridEl.appendChild(fragment);
             
-            // Set up resize listener for scaling adjustment
             window.addEventListener('resize', scaleGameFrame);
         }
 
@@ -1412,31 +1399,38 @@
          * based on the game's native size and the current viewport size.
          */
         function scaleGameFrame() {
-            const gameData = GAMES.find(g => g.file === gameFrameEl.src.split('/').pop());
+            // Find the game data based on the currently loaded iframe source
+            const currentSrc = gameFrameEl.src.split('/').pop();
+            const gameData = GAMES.find(g => g.file === currentSrc);
+            
             if (!gameData || gameViewContainerEl.style.display === 'none') return;
             
-            const nativeWidth = gameData.width || 800; // Default to 800 if missing
-            const nativeHeight = gameData.height || 600; // Default to 600 if missing
+            const nativeWidth = gameData.width;
+            const nativeHeight = gameData.height;
 
-            const viewportWidth = window.innerWidth - 40; // Total horizontal space available (minus padding)
-            const viewportHeight = window.innerHeight - 120; // Total vertical space available (minus header and button space)
+            // Get available viewport space (account for button and padding)
+            // Use 100% of viewport minus padding (20px left/right, 20px top/bottom)
+            const viewportWidth = window.innerWidth - 40; 
+            const viewportHeight = window.innerHeight - 40; 
 
-            // Determine the scaling factor: which dimension is the bottleneck?
+            // Determine the scaling factor
             const scaleX = viewportWidth / nativeWidth;
             const scaleY = viewportHeight / nativeHeight;
             
+            // Choose the smaller scale factor, capped at 1 (to prevent upscaling beyond native res)
             const scaleFactor = Math.min(1, scaleX, scaleY);
             
-            // Apply the transformation and set the frame's *native* dimensions
+            // 1. Set the iframe's *native* dimensions (unscaled size)
             gameFrameEl.style.width = `${nativeWidth}px`;
             gameFrameEl.style.height = `${nativeHeight}px`;
+
+            // 2. Apply the transformation
             gameFrameEl.style.transform = `scale(${scaleFactor})`;
         }
 
 
         /**
          * Loads a selected game into the iframe and hides the main grid.
-         * @param {Object} game - The game object containing file, width, and height.
          */
         function loadGame(game) {
             // Hide the grid and header
@@ -1450,13 +1444,13 @@
             // Show the game container immediately
             gameViewContainerEl.style.display = 'flex';
             
-            // Adjust scaling right after loading the source
-            scaleGameFrame();
+            // Adjust scaling right after loading the source (needs a slight delay for dimensions to update)
+            setTimeout(scaleGameFrame, 10);
 
             // Focus the iframe for immediate key/mouse input
             setTimeout(() => {
                  gameFrameEl.focus();
-            }, 500); // 500ms delay to ensure DOM manipulation finishes
+            }, 500); 
         }
 
         /**
@@ -1465,6 +1459,11 @@
         function unloadGame() {
             // Clear the iframe source
             gameFrameEl.src = '';
+            
+            // Remove transform styles
+            gameFrameEl.style.width = '';
+            gameFrameEl.style.height = '';
+            gameFrameEl.style.transform = '';
             
             // Update visibility
             gameViewContainerEl.style.display = 'none';
@@ -1491,7 +1490,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Minimalist Infinite City Builder</title>
+    <title>Minimal Metropolis</title>
     <style>
         /* --- GLOBAL STYLES --- */
         body {
@@ -1500,7 +1499,7 @@
             background-color: #333;
             font-family: Arial, sans-serif;
             color: #fff;
-            overflow: hidden; /* Prevent body scroll, use container scroll */
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             height: 100vh;
@@ -1528,25 +1527,27 @@
             font-weight: bold;
             text-transform: uppercase;
         }
-        .color-R { color: #f00; }
-        .color-C { color: #ff0; }
-        .color-I { color: #00f; }
+        .color-R { color: #00f; } /* Residential - Blue */
+        .color-C { color: #ff0; } /* Commercial - Yellow */
+        .color-I { color: #f00; } /* Industrial - Red */
 
         /* --- GAME CONTAINER & SCROLLING --- */
         #game-container {
             flex-grow: 1;
-            overflow: scroll; /* Allows the map to be scrolled infinitely */
+            overflow: scroll;
             cursor: crosshair;
             /* Center map roughly in view */
             margin-top: calc(50vh - 50px);
             margin-left: calc(50vw - 50px);
+            width: 100%; /* Ensure container fills the iframe */
+            height: 100%;
         }
 
         /* --- MAP GRID STYLES --- */
         #map {
             display: grid;
             background-color: #222;
-            transition: width 0.3s, height 0.3s; /* Smooth expansion */
+            transition: width 0.3s, height 0.3s;
             will-change: transform, width, height;
         }
 
@@ -1559,9 +1560,9 @@
         }
 
         /* Building Colors */
-        .R { background-color: #00f; } /* Residential - Blue */
-        .C { background-color: #ff0; } /* Commercial - Yellow */
-        .I { background-color: #f00; } /* Industrial - Red */
+        .R { background-color: #00f; }
+        .C { background-color: #ff0; }
+        .I { background-color: #f00; }
     </style>
 </head>
 <body>
@@ -1570,7 +1571,7 @@
         <p>Score: <span id="score-display">0</span></p>
         <p>Building: <span id="selected-type">Residential</span></p>
         <p class="key-hint">Keys: 1 (R), 2 (C), 3 (I)</p>
-        <p class="key-hint">Click near edges to expand map!</p>
+        <p class="key-hint">Click near bottom edge to expand map!</p>
     </div>
 
     <div id="game-container">
@@ -1597,8 +1598,6 @@
             score: 0,
             currentTypeKey: '1',
             gridSize: INITIAL_MAP_SIZE,
-            minCoord: 0, // Current minimum grid coordinate (row/col index)
-            maxCoord: INITIAL_MAP_SIZE - 1, // Current maximum grid coordinate
             isExpanding: false
         };
 
@@ -1655,93 +1654,6 @@
 
         // --- EXPANSION LOGIC ---
 
-        function expandMap(direction) {
-            if (state.isExpanding) return;
-            state.isExpanding = true;
-
-            const currentSize = state.gridSize;
-            const newSize = currentSize + EXPANSION_AMOUNT;
-            state.gridSize = newSize;
-
-            const fragment = document.createDocumentFragment();
-
-            let newCols = 0;
-            let newRows = 0;
-            let prepend = false;
-
-            if (direction === 'top' || direction === 'bottom') {
-                newRows = EXPANSION_AMOUNT;
-            }
-            if (direction === 'left' || direction === 'right') {
-                newCols = EXPANSION_AMOUNT;
-            }
-
-            // 1. Update Grid Dimensions (CSS)
-            mapEl.style.gridTemplateColumns = `repeat(${newSize}, ${TILE_SIZE}px)`;
-            mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
-            mapEl.style.width = `${newSize * TILE_SIZE}px`;
-            mapEl.style.height = `${newSize * TILE_SIZE}px`;
-
-            // 2. Generate new tiles
-            if (direction === 'bottom') {
-                // Add rows at the bottom
-                for (let r = currentSize; r < newSize; r++) {
-                    for (let c = 0; c < currentSize; c++) {
-                        const tile = createTile(r, c);
-                        fragment.appendChild(tile);
-                    }
-                }
-                mapEl.appendChild(fragment);
-
-            } else if (direction === 'right') {
-                // Add columns on the right (tricky, needs to insert rows interleaved)
-                let currentRowStart = currentSize * currentSize;
-                let newTiles = [];
-                for (let r = 0; r < currentSize; r++) {
-                    // Start index of the existing row (r * currentSize)
-                    const existingRowIndex = r * currentSize;
-                    
-                    // Generate new tiles for this row
-                    for (let c = currentSize; c < newSize; c++) {
-                        newTiles.push(createTile(r, c));
-                    }
-                }
-
-                // Since inserting into the DOM grid layout by simple appending/prepending is messy
-                // for edge columns, the safest method is often to rebuild or use careful insertion
-                // based on the grid index.
-                // Minimalist approach: We skip left/top expansion for simplicity and only implement
-                // right and bottom expansion, making the starting corner fixed (0,0).
-                
-                // Let's reset the assumption: For a minimalist builder, we simplify the infinite scrolling
-                // by *only* expanding downwards and rightwards. This avoids shifting coordinates and pre-pending
-                // which is complex in DOM grid. The origin (0,0) is always the top-left corner.
-
-                // Simplified Expansion (Only Rightward):
-                if (direction === 'right') {
-                     // Add EXPANSION_AMOUNT columns, interleaving them correctly
-                    for (let r = 0; r < currentSize; r++) {
-                        // Find the last tile of the current row
-                        const lastTileInRow = mapEl.querySelector(`[data-r="${r}"][data-c="${currentSize - 1}"]`);
-                        
-                        // Insert new tiles after it
-                        for (let c = currentSize; c < newSize; c++) {
-                            fragment.appendChild(createTile(r, c));
-                        }
-                        lastTileInRow.parentNode.insertBefore(fragment, lastTileInRow.nextSibling);
-                    }
-                }
-                
-            } else {
-                // Ignore top/left for minimalist version due to complex coordinate shifting requirements
-                // We rely on starting large and expanding only R/B
-                console.warn("Only bottom/right expansion supported in this minimal version.");
-            }
-            
-            // Allow expansion again shortly
-            setTimeout(() => { state.isExpanding = false; }, 300);
-        }
-
         function createTile(r, c) {
             const tile = document.createElement('div');
             tile.className = 'tile';
@@ -1750,55 +1662,34 @@
             return tile;
         }
 
-
+        // Simplified Expansion (Only expands downward)
         function checkAndExpandMap(r, c) {
             const size = state.gridSize;
 
-            if (r >= size - EXPANSION_THRESHOLD) {
-                // Near bottom edge
-                expandMap('bottom');
-            }
-            
-            if (c >= size - EXPANSION_THRESHOLD) {
-                // Near right edge
-                // NOTE: Right expansion is complex with interleaved DOM updates. 
-                // For this minimal demo, we'll implement a simplified 1D expansion
-                // (expand width and height simultaneously on hitting any edge).
+            if (r >= size - EXPANSION_THRESHOLD && !state.isExpanding) {
+                state.isExpanding = true;
                 
-                // Simplified expansion if any edge is hit:
-                expandMap('bottom'); // Expand height
-                expandMap('right'); // Expand width (requires re-engineering, let's keep it 1D for ultra-minimalism)
-            }
-            
-            // Reverting to the simpler, single-direction "down and right" expansion trigger:
-            if (r >= size - EXPONSION_THRESHOLD || c >= size - EXPANSION_THRESHOLD) {
-                // Combined Expansion (Expands both R and C if hit near edge)
+                const currentSize = state.gridSize;
+                const newSize = currentSize + EXPANSION_AMOUNT;
                 
-                // This is the simplest way to visually expand the grid without complex DOM insertions
-                // Note: This implementation only properly handles expanding rows at the bottom 
-                // and expects columns to be added correctly in the grid template, which is tricky.
-                
-                // Let's implement the simplest possible visual expansion: ONLY on the bottom edge
-                if (r >= size - EXPANSION_THRESHOLD) {
-                    const currentSize = state.gridSize;
-                    const newSize = currentSize + EXPANSION_AMOUNT;
-                    
-                    // 1. Generate new tiles (new rows only)
-                    const fragment = document.createDocumentFragment();
-                    for (let row = currentSize; row < newSize; row++) {
-                        for (let col = 0; col < currentSize; col++) {
-                            fragment.appendChild(createTile(row, col));
-                        }
+                // 1. Generate new tiles (new rows only)
+                const fragment = document.createDocumentFragment();
+                for (let row = currentSize; row < newSize; row++) {
+                    for (let col = 0; col < currentSize; col++) {
+                        fragment.appendChild(createTile(row, col));
                     }
-                    mapEl.appendChild(fragment);
-                    
-                    // 2. Update state and dimensions
-                    state.gridSize = newSize;
-                    mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
-                    mapEl.style.height = `${newSize * TILE_SIZE}px`;
-                    
-                    console.log(`Map expanded to ${newSize}x${currentSize}`);
                 }
+                mapEl.appendChild(fragment);
+                
+                // 2. Update state and dimensions
+                state.gridSize = newSize;
+                mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
+                mapEl.style.height = `${newSize * TILE_SIZE}px`;
+                
+                console.log(`Map expanded to ${newSize}x${currentSize}`);
+                
+                // Allow expansion again shortly
+                setTimeout(() => { state.isExpanding = false; }, 300);
             }
         }
 
@@ -1862,7 +1753,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Parkour Platformer</title>
+    <title>Gravity Glide</title>
     <style>
         /* --- GLOBAL RESET & BASE STYLES --- */
         body, html {
@@ -1873,11 +1764,11 @@
             font-family: sans-serif;
         }
 
-        /* --- GAME CONTAINER --- */
+        /* --- GAME CONTAINER (Responsive to iframe size) --- */
         #game-container {
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             background-color: #87ceeb; /* Sky Blue */
             overflow: hidden;
         }
@@ -1887,9 +1778,9 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 500000px; /* Effectively infinite width */
+            width: 500000px;
             height: 100%;
-            will-change: transform; /* Performance optimization for translation */
+            will-change: transform;
         }
 
         /* --- PLAYER STYLES --- */
@@ -1986,6 +1877,7 @@
         let world;
         let scoreDisplay;
         let gameOverScreen;
+        let screenHeight; // Dynamic height variable
 
         let platforms = [];
         let keys = {};
@@ -1998,8 +1890,8 @@
         let score = 0;
 
         let lastPlatformX = 0;
-        let currentLevelHeight = window.innerHeight - PLATFORM_HEIGHT - 100;
-        let targetWorldX = 0; // The target position for the world translation
+        let currentLevelHeight = 0; // Calculated on load
+        let targetWorldX = 0;
 
         // --- INITIALIZATION ---
         window.onload = function() {
@@ -2008,7 +1900,9 @@
             scoreDisplay = document.getElementById('score');
             gameOverScreen = document.getElementById('game-over-screen');
 
-            // Set initial player Y position relative to screen bottom
+            // Set initial dynamic screen size
+            screenHeight = window.innerHeight;
+            currentLevelHeight = screenHeight - PLATFORM_HEIGHT - 100;
             playerY = currentLevelHeight - 30; // 30 is player height
 
             // Create the initial starting platform
@@ -2047,7 +1941,6 @@
         }
 
         function generateNextPlatform() {
-            // Check if we need to generate more platforms (i.e., if the last platform is within 1000px of playerX)
             if (lastPlatformX < playerX + window.innerWidth + 500) {
                 const minGap = 100;
                 const maxGap = 350;
@@ -2067,7 +1960,7 @@
                 // Clamp Y position within screen bounds
                 const screenHeight = window.innerHeight;
                 newY = Math.max(screenHeight - PLATFORM_HEIGHT - 50, newY); // Don't go too low
-                newY = Math.min(screenHeight - PLATBLE_HEIGHT - 400, newY); // Don't go too high
+                newY = Math.min(screenHeight - PLATFORM_HEIGHT - 400, newY); // Don't go too high
 
                 currentLevelHeight = newY;
                 createPlatform(newX, newY, width);
@@ -2077,6 +1970,7 @@
         // --- GAME LOGIC UPDATES ---
         function updatePhysics() {
             if (isGameOver) return;
+            screenHeight = window.innerHeight; // Keep dynamic height updated
 
             // 1. Apply Gravity
             playerVelY += GRAVITY;
@@ -2098,10 +1992,10 @@
             platforms.forEach(p => {
                 // Simple AABB collision check
                 if (
-                    playerX < p.x + p.width &&          // Player right edge past platform left edge
-                    playerX + 30 > p.x &&               // Player left edge past platform right edge
-                    newPlayerY + 30 > p.y &&            // Player bottom past platform top
-                    newPlayerY < p.y + p.height         // Player top above platform bottom
+                    playerX < p.x + p.width &&
+                    playerX + 30 > p.x &&
+                    newPlayerY + 30 > p.y &&
+                    newPlayerY < p.y + p.height
                 ) {
                     // Check if player is falling onto the platform (top collision)
                     if (playerVelY > 0 && playerY + 30 <= p.y) {
@@ -2120,7 +2014,7 @@
             playerY = newPlayerY;
 
             // 5. Game Over Check (Falling off screen)
-            if (playerY > window.innerHeight) {
+            if (playerY > screenHeight) {
                 endGame();
             }
 
@@ -2144,10 +2038,7 @@
             player.style.transform = `translate(${PLAYER_SCREEN_X}px, ${playerY}px)`;
 
             // 2. Calculate World Offset (Camera Follow)
-            // The camera should try to keep the player at PLAYER_SCREEN_X
             let desiredWorldX = -(playerX - PLAYER_SCREEN_X);
-
-            // Smooth the camera movement
             targetWorldX += (desiredWorldX - targetWorldX) * CAMERA_SMOOTHING;
 
             // 3. Apply World Translation
@@ -2189,7 +2080,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Space Survival</title>
+    <title>Void Runner</title>
     <style>
         /* CORE SETUP */
         body {
@@ -2319,10 +2210,9 @@
 
     <script>
         // --- GAME CONSTANTS AND STATE ---
-        const GAME_SPEED = 60; // Target FPS for smoother interpolation
         const PLAYER_SPEED = 5;
         const ASTEROID_SPAWN_RATE = 1500; // milliseconds
-        const COLLISION_RADIUS_FACTOR = 0.8; // Fudge factor for collision
+        const COLLISION_RADIUS_FACTOR = 0.8; 
 
         let gameState = 'ready'; // ready, running, gameover
         let lastTime = 0;
@@ -2335,7 +2225,7 @@
             element: document.getElementById('player'),
             x: window.innerWidth / 2,
             y: window.innerHeight / 2,
-            width: 24, // Matches CSS border size
+            width: 24,
             height: 24,
             radius: 12,
             hp: 3,
@@ -2369,9 +2259,10 @@
             // Clear existing asteroids from DOM
             document.querySelectorAll('.asteroid').forEach(a => a.remove());
 
-            // Reset player position
+            // Reset player position and rotation
             player.x = window.innerWidth / 2;
             player.y = window.innerHeight / 2;
+            player.rotation = 0;
             
             // Hide game over screen
             gameOverScreen.style.display = 'none';
@@ -2380,6 +2271,7 @@
             
             // Start the main loop
             if (gameState === 'running') {
+                lastTime = performance.now();
                 requestAnimationFrame(gameLoop);
             }
         }
@@ -2414,31 +2306,39 @@
             let dx = 0;
             let dy = 0;
 
-            if (keys['w'] || keys['arrowup']) dy -= PLAYER_SPEED;
-            if (keys['s'] || keys['arrowdown']) dy += PLAYER_SPEED;
-            if (keys['a'] || keys['arrowleft']) dx -= PLAYER_SPEED;
-            if (keys['d'] || keys['arrowright']) dx += PLAYER_SPEED;
+            // Use fixed delta for movement to smooth across variable framerates
+            const moveStep = PLAYER_SPEED * (deltaTime / 16.6); 
 
-            // Normalize diagonal movement (Pythagorean theorem)
+            if (keys['w'] || keys['arrowup']) dy -= moveStep;
+            if (keys['s'] || keys['arrowdown']) dy += moveStep;
+            if (keys['a'] || keys['arrowleft']) dx -= moveStep;
+            if (keys['d'] || keys['arrowright']) dx += moveStep;
+
+            // Normalize diagonal movement
             if (dx !== 0 && dy !== 0) {
                 const magnitude = Math.sqrt(dx * dx + dy * dy);
-                dx = (dx / magnitude) * PLAYER_SPEED;
-                dy = (dy / magnitude) * PLAYER_SPEED;
+                dx = (dx / magnitude) * moveStep;
+                dy = (dy / magnitude) * moveStep;
             }
 
             player.x += dx;
             player.y += dy;
 
             // Keep player within bounds
-            player.x = Math.max(player.width / 2, Math.min(window.innerWidth - player.width / 2, player.x));
-            player.y = Math.max(player.height / 2, Math.min(window.innerHeight - player.height / 2, player.y));
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            player.x = Math.max(player.width / 2, Math.min(screenW - player.width / 2, player.x));
+            player.y = Math.max(player.height / 2, Math.min(screenH - player.height / 2, player.y));
             
-            // Calculate rotation based on movement direction (for a basic ship look)
+            // Calculate rotation based on movement direction 
             if (dx !== 0 || dy !== 0) {
-                player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
+                // Determine movement angle for rotation visual
+                if (dx !== 0 || dy !== 0) {
+                    player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
+                }
             }
 
-            // Apply transformation to the DOM element
+            // Apply transformation to the DOM element (translate centers the element, then moves it to player.x/y)
             player.element.style.transform = 
                 `translate(-50%, -50%) translate(${player.x}px, ${player.y}px) rotate(${player.rotation}deg)`;
         }
@@ -2463,7 +2363,7 @@
 
         function createAsteroid() {
             const size = 20 + Math.random() * 40; // 20px to 60px
-            const speed = 1 + Math.random() * 2; 
+            const baseSpeed = 1 + Math.random() * 2; 
 
             let startX, startY, vx, vy;
 
@@ -2472,34 +2372,37 @@
 
             const screenW = window.innerWidth;
             const screenH = window.innerHeight;
+            const targetX = screenW / 2 + (Math.random() * 200 - 100); // Target center +- 100
+            const targetY = screenH / 2 + (Math.random() * 200 - 100);
 
-            // Determine spawn coordinates (just outside the screen) and velocity vector
+            // Determine spawn coordinates and calculate velocity vector towards a target point
             switch (edge) {
                 case 0: // Top
                     startX = Math.random() * screenW;
                     startY = -size;
-                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
-                    vy = speed;
                     break;
                 case 1: // Right
                     startX = screenW + size;
                     startY = Math.random() * screenH;
-                    vx = -speed;
-                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
                     break;
                 case 2: // Bottom
                     startX = Math.random() * screenW;
                     startY = screenH + size;
-                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
-                    vy = -speed;
                     break;
                 case 3: // Left
                     startX = -size;
                     startY = Math.random() * screenH;
-                    vx = speed;
-                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
                     break;
             }
+
+            // Normalize vector towards the target
+            const dx = targetX - startX;
+            const dy = targetY - startY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            vx = (dx / length) * baseSpeed;
+            vy = (dy / length) * baseSpeed;
+            
 
             const asteroidElement = document.createElement('div');
             asteroidElement.classList.add('asteroid');
@@ -2515,7 +2418,7 @@
                 radius: size / 2,
                 vx: vx,
                 vy: vy,
-                speed: speed
+                speed: baseSpeed
             };
             
             asteroids.push(newAsteroid);
@@ -2531,28 +2434,31 @@
 
         function updateAsteroids(deltaTime) {
             const toRemove = [];
+            const dt_factor = deltaTime / 16.6; // Scale movement by frame time
 
             for (let i = 0; i < asteroids.length; i++) {
                 const asteroid = asteroids[i];
                 
                 // Move asteroid
-                asteroid.x += asteroid.vx * deltaTime * 0.05;
-                asteroid.y += asteroid.vy * deltaTime * 0.05;
+                asteroid.x += asteroid.vx * dt_factor;
+                asteroid.y += asteroid.vy * dt_factor;
 
                 // Update DOM position
                 asteroid.element.style.left = `${asteroid.x - asteroid.radius}px`;
                 asteroid.element.style.top = `${asteroid.y - asteroid.radius}px`;
 
                 // Check if asteroid is outside bounds
+                const screenW = window.innerWidth;
+                const screenH = window.innerHeight;
                 if (asteroid.x < -asteroid.radius * 2 || 
-                    asteroid.x > window.innerWidth + asteroid.radius * 2 ||
+                    asteroid.x > screenW + asteroid.radius * 2 ||
                     asteroid.y < -asteroid.radius * 2 || 
-                    asteroid.y > window.innerHeight + asteroid.radius * 2) {
+                    asteroid.y > screenH + asteroid.radius * 2) {
                     toRemove.push(i);
                 }
             }
             
-            // Remove off-screen asteroids (in reverse order to maintain index integrity)
+            // Remove off-screen asteroids
             for (let i = toRemove.length - 1; i >= 0; i--) {
                 const index = toRemove[i];
                 asteroids[index].element.remove();
@@ -2563,7 +2469,6 @@
         // --- COLLISION DETECTION ---
 
         function checkCollisions() {
-            // Player collision point (center of the bounding box)
             const pCenterX = player.x;
             const pCenterY = player.y;
             const pRadius = player.radius * COLLISION_RADIUS_FACTOR;
@@ -2584,7 +2489,7 @@
                     // Remove the hit asteroid
                     asteroid.element.remove();
                     asteroids.splice(i, 1);
-                    i--; // Decrement index since we removed an element
+                    i--;
                 }
             }
         }
@@ -2607,20 +2512,17 @@
 
         // --- INITIAL SETUP ---
         window.onload = () => {
-            // Ensure player is centered initially (CSS handles the translation transformation)
-            player.element.style.left = '0px';
-            player.element.style.top = '0px'; 
-            
             // Start the game immediately when the page loads
             initGame();
         };
 
-        // Handle window resizing to keep bounds correct (though player position might shift slightly)
+        // Handle window resizing to keep bounds correct 
         window.addEventListener('resize', () => {
             if (gameState === 'running') {
                 // Re-center player if necessary upon resize
-                player.x = Math.min(player.x, window.innerWidth - player.width / 2);
-                player.y = Math.min(player.y, window.innerHeight - player.height / 2);
+                player.x = window.innerWidth / 2;
+                player.y = window.innerHeight / 2;
+                updatePlayer(0); // Force position update
             }
         });
 
@@ -2637,7 +2539,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Precision Aim Trainer</title>
+    <title>Vector Clicker</title>
     <style>
         /* Base Reset and Setup */
         body, html {
@@ -2663,16 +2565,14 @@
             align-items: center;
         }
 
-        /* Game Area Styling */
+        /* Game Area Styling (Uses 100% of the iframe window) */
         #game-area {
-            width: 98vw;
-            height: 90vh;
-            margin: 1vh auto 0;
+            width: 100%;
+            height: calc(100vh - 5vh - 2px); /* Full height minus HUD */
             background-color: #11111b;
             position: relative;
             overflow: hidden;
             cursor: crosshair;
-            border-radius: 8px;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
         }
 
@@ -2680,23 +2580,23 @@
         #target {
             position: absolute;
             cursor: pointer;
-            background-color: #f38ba8; /* Pink/Red default */
+            background-color: #f38ba8;
             border-radius: 50%;
             transition: transform 100ms ease-out, background-color 0ms;
             box-shadow: 0 0 10px rgba(243, 139, 148, 0.7);
-            display: none; /* Start hidden */
+            display: none;
             z-index: 10;
         }
 
         /* Visual Feedback Classes */
         .target-hit {
-            background-color: #a6e3a1 !important; /* Green */
+            background-color: #a6e3a1 !important;
             box-shadow: 0 0 15px #a6e3a1 !important;
             transform: scale(1.1);
         }
 
         .target-miss {
-            background-color: #f9e2af !important; /* Yellow/Orange warning */
+            background-color: #f9e2af !important;
             box-shadow: 0 0 15px #f9e2af !important;
             transform: scale(0.9);
         }
@@ -2755,7 +2655,7 @@
     <div id="game-area">
         <div id="target"></div>
         <div id="overlay">
-            <h1>Precision Aim Trainer</h1>
+            <h1>Vector Clicker</h1>
             <p id="overlay-text">Click the colored target as fast as possible to increase your score.</p>
             <p>Difficulty continuously scales: Targets get smaller and disappear faster!</p>
             <p>Miss or run out of time, and you lose a life. Lose 3 lives to end the game.</p>
@@ -2771,8 +2671,8 @@
         const MIN_VISIBILITY_TIME = 300; // Hard minimum time
 
         // Scaling Factors (Score-dependent difficulty)
-        const SIZE_DECREMENT_FACTOR = 0.985; // Target size = Initial * (Factor ^ Score)
-        const TIME_DECREMENT_FACTOR = 0.99; // Time = Initial * (Factor ^ Score)
+        const SIZE_DECREMENT_FACTOR = 0.985;
+        const TIME_DECREMENT_FACTOR = 0.99;
 
         let score = 0;
         let lives = 3;
@@ -2839,7 +2739,6 @@
 
             // Ensure the click was exactly on the target element
             if (event.target !== targetElement) {
-                // This shouldn't happen if the target listener is used, but good practice
                 return;
             }
 
@@ -2918,7 +2817,6 @@
         targetElement.addEventListener('click', handleHit);
 
         // 3. Game Area Miss Handler
-        // If the player clicks the game area but not the target, it's a miss.
         gameArea.addEventListener('click', (event) => {
             if (gameActive && event.target === gameArea) {
                 handleMiss();
@@ -2940,7 +2838,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Pipe Connect Puzzle Generator</title>
+    <title>Circuit Flow</title>
     <style>
         :root {
             --grid-size: 8;
@@ -2987,6 +2885,25 @@
             border: 4px solid #34495e;
             box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
             transition: all 0.5s ease;
+        }
+        
+        /* RESPONSIVENESS: Shrink grid and font size if grid is too big for the viewport (especially mobile) */
+        @media (max-width: 600px) {
+            :root {
+                --cell-size: 30px; /* Smaller cells on small screens */
+            }
+        }
+        @media (max-width: 450px) {
+             :root {
+                --cell-size: 25px; /* Even smaller cells */
+                --pipe-thickness: 6px;
+            }
+            h1 {
+                font-size: 1.5em;
+            }
+            #info-bar {
+                font-size: 0.9em;
+            }
         }
 
         .cell {
@@ -3072,10 +2989,7 @@
             background-color: var(--solved-path-color);
         }
         .cell.on-path[data-type] .pipe-visual {
-            /* Change the pipe color itself for better feedback */
             filter: hue-rotate(120deg) brightness(1.2); 
-            /* This is a cheat way to change pseudo-element color, 
-               but works well for visualization purposes */
         }
 
         .message {
@@ -3092,7 +3006,7 @@
 </head>
 <body>
 
-    <h1>Pipe Connect Puzzle</h1>
+    <h1>Circuit Flow Puzzle</h1>
 
     <div id="info-bar">
         <div>Score: <span id="score-display">0</span></div>
@@ -3119,23 +3033,17 @@
         const GRID_CONTAINER = document.getElementById('game-grid');
         
         // Pipe Connections: [N, E, S, W] (True means open)
-        // Rotation is 90 degrees clockwise.
         const PIPE_MAP = {
-            // 0: Empty/Blocker (Should not be used in main path, useful for padding/walls)
             0: { id: 0, connections: [false, false, false, false], css: 'pipe-block' },
-            // 1: Straight (Vertical default)
             1: { id: 1, connections: [true, false, true, false], css: 'pipe-straight' },
-            // 2: Corner (NE default)
             2: { id: 2, connections: [true, true, false, false], css: 'pipe-corner' },
-            // 3: T-Junction (NES default)
             3: { id: 3, connections: [true, true, true, false], css: 'pipe-t-junction' },
-            // 4: Cross
             4: { id: 4, connections: [true, true, true, true], css: 'pipe-cross' }
         };
 
         const DIRS = [
-            { r: -1, c: 0, index: 0, opposite: 2 }, // North (index 0, connected by South 2)
-            { r: 0, c: 1, index: 1, opposite: 3 },  // East (index 1, connected by West 3)
+            { r: -1, c: 0, index: 0, opposite: 2 }, // North
+            { r: 0, c: 1, index: 1, opposite: 3 },  // East
             { r: 1, c: 0, index: 2, opposite: 0 },  // South
             { r: 0, c: -1, index: 3, opposite: 1 }   // West
         ];
@@ -3144,7 +3052,6 @@
 
         /**
          * Rotates the connection array clockwise by R steps (0, 1, 2, 3).
-         * R=1: [N, E, S, W] -> [W, N, E, S]
          */
         function rotateConnections(connections, rotation) {
             if (rotation === 0) return connections;
@@ -3153,7 +3060,6 @@
             const steps = rotation % 4;
 
             for (let i = 0; i < steps; i++) {
-                // Rotate array elements: move last to front
                 const last = rotated.pop();
                 rotated.unshift(last);
             }
@@ -3177,7 +3083,6 @@
         }
 
         // --- GENERATION LOGIC ---
-
         function generatePuzzle() {
             grid = [];
             moves = 0;
@@ -3190,207 +3095,179 @@
                         r, c,
                         type: 0,
                         rotation: 0,
-                        isPath: false, // For generation tracking
-                        initialPathRotation: 0 // Store rotation needed for solved path
+                        isPath: false,
+                        initialPathRotation: 0
                     };
                 }
             }
 
-            // 2. Define Start and End Points
-            // Start at a random edge
-            let currentR, currentC;
-            const edgeChoices = [
-                { r: 0, c: getRandomInt(GRID_SIZE), dir: 2 }, // Top edge, must start moving South
-                { r: GRID_SIZE - 1, c: getRandomInt(GRID_SIZE), dir: 0 }, // Bottom edge, must start moving North
-                { r: getRandomInt(GRID_SIZE), c: 0, dir: 1 }, // Left edge, must start moving East
-                { r: getRandomInt(GRID_SIZE), c: GRID_SIZE - 1, dir: 3 } // Right edge, must start moving West
+            // 2. Define Start and End Points (Force Start/End to be on opposite edges)
+            const edgePairs = [
+                [{r: 0, c: getRandomInt(GRID_SIZE)}, {r: GRID_SIZE - 1, c: getRandomInt(GRID_SIZE)}], // Top/Bottom
+                [{r: getRandomInt(GRID_SIZE), c: 0}, {r: getRandomInt(GRID_SIZE), c: GRID_SIZE - 1}]  // Left/Right
             ];
             
-            const startEdge = edgeChoices[getRandomInt(4)];
-            currentR = startEdge.r;
-            currentC = startEdge.c;
-            
-            startCell = { r: currentR, c: currentC };
+            const chosenPair = edgePairs[getRandomInt(2)];
+            startCell = chosenPair[0];
+            endCell = chosenPair[1];
+
+            let currentR = startCell.r;
+            let currentC = startCell.c;
             
             let pathLength = 0;
-            let currentCell = grid[currentR][currentC];
-            currentCell.isPath = true;
+            grid[currentR][currentC].isPath = true;
 
             const pathHistory = [{ r: currentR, c: currentC }];
             const minPathLength = Math.floor(GRID_SIZE * 1.5);
             
             // 3. Generate the winding path using Randomized DFS
-            while (pathLength < GRID_SIZE * GRID_SIZE) {
-                const neighbors = DIRS.map((dir, index) => ({ dir, index }))
-                    .filter(({ dir }) => isInsideGrid(currentR + dir.r, currentC + dir.c))
-                    .filter(({ dir }) => !grid[currentR + dir.r][currentC + dir.c].isPath);
+            while (currentR !== endCell.r || currentC !== endCell.c) {
+                const isNearEnd = Math.abs(endCell.r - currentR) + Math.abs(endCell.c - currentC) <= 2;
                 
-                if (neighbors.length === 0) {
-                    // Path dead-ends or fully explored. If path is long enough, this is the end.
-                    break; 
+                let potentialMoves = DIRS.map((dir, index) => ({ dir, index }))
+                    .filter(({ dir }) => isInsideGrid(currentR + dir.r, currentC + dir.c));
+                
+                // Prioritize moving towards the end point if the path is long enough or near the end
+                if (pathLength >= minPathLength || isNearEnd) {
+                    potentialMoves.sort((a, b) => {
+                        const distA = Math.hypot(endCell.r - (currentR + a.dir.r), endCell.c - (currentC + a.dir.c));
+                        const distB = Math.hypot(endCell.r - (currentR + b.dir.r), endCell.c - (currentC + b.dir.c));
+                        return distA - distB;
+                    });
+                }
+                
+                let nextMove = null;
+                for (const move of potentialMoves) {
+                    const nextR = currentR + move.dir.r;
+                    const nextC = currentC + move.dir.c;
+                    
+                    // Do not step on existing path segments unless we are reaching the final cell
+                    if (grid[nextR][nextC].isPath && (nextR !== endCell.r || nextC !== endCell.c)) {
+                        continue;
+                    }
+
+                    // Look ahead: Ensure the chosen move doesn't lead into a dead end immediately (optional, hard to implement fully)
+                    
+                    nextMove = move;
+                    break;
                 }
 
-                // Randomly pick a direction
-                const { dir: chosenDir, index: entryDirIndex } = neighbors[getRandomInt(neighbors.length)];
+                if (!nextMove) {
+                    // Backtrack (if not at min length, but skipping complex DFS backtracking for minimalism)
+                    break;
+                }
 
+                const { dir: chosenDir, index: exitDirIndex } = nextMove;
                 const nextR = currentR + chosenDir.r;
                 const nextC = currentC + chosenDir.c;
                 const nextCell = grid[nextR][nextC];
-
-                // Determine required pipe type for current cell
-                const prevCell = pathHistory[pathHistory.length - 1] || currentCell;
                 
-                // 4. Connect current cell to next cell
-                const exitDirIndex = entryDirIndex;
-                const requiredEntryIndex = chosenDir.opposite; // The direction the next pipe connects to current
-                
-                // Look up required connections based on neighbors (previous and next)
-                
-                // For the current cell, we need an exit connection at `exitDirIndex`
-                // AND an entry connection from the previous cell.
+                const prevCell = pathHistory[pathHistory.length - 1];
                 let prevDirIndex = -1;
-                if (pathHistory.length > 1) {
-                    const prevR = prevCell.r;
-                    const prevC = prevCell.c;
-                    
+                
+                if (pathHistory.length > 0) {
                     // Find which direction index connects prev to current
                     for(let i=0; i<4; i++) {
-                        if (prevR + DIRS[i].r === currentR && prevC + DIRS[i].c === currentC) {
+                        if (prevCell.r + DIRS[i].r === currentR && prevCell.c + DIRS[i].c === currentC) {
                             prevDirIndex = i;
                             break;
                         }
                     }
                 }
-                
-                // Define the pipe segments required (based on current/next neighbor connections)
-                // This is a simplified approach, focusing only on the path we are building.
-                
-                let neededConnections = [];
-                if (pathHistory.length > 1) {
-                    neededConnections.push(prevDirIndex);
-                }
-                neededConnections.push(exitDirIndex);
-                
-                // Find the smallest pipe type that satisfies these connections
-                // (This is overly complex for single path generation, let's simplify pipe assignment)
-                
+
                 let pipeType;
                 let finalRotation = 0;
                 
-                if (pathHistory.length === 1) {
-                    // Start piece: Must be a Straight pipe leading out
-                    pipeType = 1; 
-                    finalRotation = (exitDirIndex % 2 === 0) ? 1 : 0; // 0 for H, 1 for V, but initial type is V (1)
-                    if (exitDirIndex === 1) finalRotation = 0; // Going East
-                    if (exitDirIndex === 3) finalRotation = 2; // Going West
-                    if (exitDirIndex === 0) finalRotation = 3; // Going North
-                    if (exitDirIndex === 2) finalRotation = 1; // Going South
+                if (pathHistory.length === 1) { // First piece after Start
+                    pipeType = 1; // Start with a straight pipe
+                    finalRotation = (exitDirIndex % 2 === 0) ? 1 : 0; // 1: V (N/S), 0: H (E/W)
+                    if (exitDirIndex === 1) finalRotation = 0; 
+                    if (exitDirIndex === 3) finalRotation = 2; 
+                    if (exitDirIndex === 0) finalRotation = 3; 
+                    if (exitDirIndex === 2) finalRotation = 1; 
                     
+                } else if (nextR === endCell.r && nextC === endCell.c) { // Final piece connecting to End
+                    pipeType = 1;
+                    finalRotation = (prevDirIndex % 2 === 0) ? 1 : 0;
+                    if (prevDirIndex === 1) finalRotation = 0; 
+                    if (prevDirIndex === 3) finalRotation = 2; 
+                    if (prevDirIndex === 0) finalRotation = 3; 
+                    if (prevDirIndex === 2) finalRotation = 1; 
                 } else {
-                    // Middle piece: Determine type based on turn
-                    const entryDir = DIRS.find(d => d.opposite === prevDirIndex);
-                    const exitDir = DIRS[exitDirIndex];
+                    // Middle piece: Must connect entry (prevDirIndex opposite) to exit (exitDirIndex)
+                    pipeType = 2; // Assume corner initially
 
-                    const dirChange = (exitDirIndex - prevDirIndex + 4) % 4;
+                    // Try Corner pipes (Type 2)
+                    let attempts = 0;
+                    while(attempts < 4) {
+                        const connections = rotateConnections(PIPE_MAP[2].connections, attempts);
+                        // Check if entry (opposite of prevDir) and exit are connected
+                        if (connections[DIRS[prevDirIndex].opposite] && connections[exitDirIndex]) {
+                            pipeType = 2;
+                            finalRotation = attempts;
+                            break;
+                        }
+                        attempts++;
+                    }
                     
-                    if (dirChange === 0 || dirChange === 2) { 
-                        // Straight path (0 or 180 degree turn from entry)
-                        pipeType = 1;
-                        finalRotation = (prevDirIndex % 2 === 0) ? 1 : 0; // Vertical if connected N/S
-                    } else { 
-                        // Corner (90 or 270 degree turn)
-                        pipeType = 2;
-                        // Find required rotation to connect entry and exit
-                        // Example: Entry S (2), Exit E (1). Base corner is N(0), E(1). Need to rotate 3 times.
-                        // Base Corner (0,1,F,F) needs to align to (F,1,2,F) (meaning Entry must be 2, Exit must be 1)
-                        
-                        // We store the type and the solved rotation needed.
-                        let attempts = 0;
-                        while(attempts < 4) {
-                            const connections = rotateConnections(PIPE_MAP[2].connections, attempts);
-                            // Check if connections match the required entry/exit (using opposite index for entry)
-                            if (connections[prevDirIndex] && connections[exitDirIndex]) {
+                    if (attempts === 4) {
+                         // Fallback to T-Junction if a corner doesn't work (for complex turns)
+                         pipeType = 3;
+                         attempts = 0;
+                         while(attempts < 4) {
+                            const connections = rotateConnections(PIPE_MAP[3].connections, attempts);
+                            if (connections[DIRS[prevDirIndex].opposite] && connections[exitDirIndex]) {
                                 finalRotation = attempts;
                                 break;
                             }
                             attempts++;
                         }
-                        
-                        if (attempts === 4) {
-                             // This should not happen if logic is sound, but sometimes path forcing requires T-junctions
-                             pipeType = 3;
-                             attempts = 0;
-                             while(attempts < 4) {
-                                const connections = rotateConnections(PIPE_MAP[3].connections, attempts);
-                                if (connections[prevDirIndex] && connections[exitDirIndex]) {
-                                    finalRotation = attempts;
-                                    break;
-                                }
-                                attempts++;
-                            }
-                        }
                     }
                 }
                 
-                currentCell.type = pipeType;
-                currentCell.initialPathRotation = finalRotation; // Store the SOLVED rotation
+                grid[currentR][currentC].type = pipeType;
+                grid[currentR][currentC].initialPathRotation = finalRotation; 
                 
-                currentCell = nextCell;
-                currentCell.isPath = true;
                 currentR = nextR;
                 currentC = nextC;
+                grid[currentR][currentC].isPath = true;
                 pathHistory.push({ r: currentR, c: currentC });
                 pathLength++;
-                
-                // If path is long enough, randomly decide if this is the end
-                if (pathLength >= minPathLength && Math.random() < 0.3) {
-                    break;
-                }
             }
             
-            // Set the final cell as the End point
-            endCell = { r: currentR, c: currentC };
-            
-            // Set types and rotations for Start and End points (must be straight pipe leading out/in)
-            if (pathHistory.length > 1) {
-                const firstPathPiece = grid[pathHistory[1].r][pathHistory[1].c];
-                const lastPathPiece = grid[pathHistory[pathHistory.length - 2].r][pathHistory[pathHistory.length - 2].c];
-                
-                // Start piece must be fixed
-                grid[startCell.r][startCell.c].type = 1;
-                grid[startCell.r][startCell.c].initialPathRotation = grid[startCell.r][startCell.c].initialPathRotation; // Already set above
-
-                // End piece (needs connection to prev piece)
-                grid[endCell.r][endCell.c].type = lastPathPiece.type === 4 ? 1 : 1; // Simplification: just make end a straight pipe connected back
-            }
-
-            // 5. Fill remaining cells (distractors)
+            // 4. Fill remaining cells (distractors)
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
                     const cell = grid[r][c];
                     if (!cell.isPath) {
-                        // Assign random pipe type (1: Straight, 2: Corner, 3: T-Junction)
-                        cell.type = getRandomInt(3) + 1;
-                        cell.initialPathRotation = getRandomInt(4); // Solved rotation doesn't matter here
+                        cell.type = getRandomInt(3) + 1; // 1, 2, or 3
+                        cell.initialPathRotation = getRandomInt(4);
                     }
                     
-                    // 6. Scramble the puzzle: apply random rotation
-                    cell.rotation = getRandomInt(4);
+                    // 5. Scramble the puzzle: apply random rotation
+                    // Ensure the Start/End neighbor has its correct initialPathRotation set, 
+                    // and we only scramble the other cells.
+                    if ((r === startCell.r && c === startCell.c) || (r === endCell.r && c === endCell.c)) {
+                         // Skip start/end markers
+                    } else if(cell.isPath) {
+                        // Scramble the main path pieces
+                        cell.rotation = getRandomInt(4);
+                    } else {
+                        // Scramble distractors
+                        cell.rotation = getRandomInt(4);
+                    }
                 }
             }
             
-            // Ensure Start and End pipes are marked correctly for rendering
-            grid[startCell.r][startCell.c].type = 0; // Use type 0 to denote special Start/End cell
-            grid[endCell.r][endCell.c].type = 0; // Use type 0
+            // Set types to 0 for special rendering of Start/End markers
+            grid[startCell.r][startCell.c].type = 0; 
+            grid[endCell.r][endCell.c].type = 0;
 
             renderGrid();
         }
 
         // --- VALIDATION LOGIC (Path Tracing) ---
-
-        /**
-         * Checks if the puzzle is solved by performing a connectivity trace.
-         */
+        
         function checkWin() {
             const visited = new Set();
             const pathCells = [];
@@ -3398,71 +3275,61 @@
             const startR = startCell.r;
             const startC = startCell.c;
             
-            let currentR = startR;
-            let currentC = startC;
-            
-            // The Start cell must lead out! Find the required exit direction based on the first path piece.
+            // Find the true first path piece neighbor and the required entry direction
             let requiredExitDirIndex = -1;
-            
-            // Find the true first path piece neighbor
             for(let i=0; i<DIRS.length; i++) {
                 const neighborR = startR + DIRS[i].r;
                 const neighborC = startC + DIRS[i].c;
-                if (isInsideGrid(neighborR, neighborC) && grid[neighborR][neighborC].isPath) {
+                // Look for the first path piece (which is *not* the end marker)
+                if (isInsideGrid(neighborR, neighborC) && grid[neighborR][neighborC].isPath && (neighborR !== endCell.r || neighborC !== endCell.c)) {
                     requiredExitDirIndex = i;
                     break;
                 }
             }
             
-            if (requiredExitDirIndex === -1) return false; // Should not happen in a valid generated puzzle
+            if (requiredExitDirIndex === -1) return false;
 
-            // Start the trace from the required exit direction
-            let entryDirection = requiredExitDirIndex; // Direction *from* the neighbor *to* the start cell (0:N, 1:E, 2:S, 3:W)
-            let pathFound = false;
-
-            // Start BFS/DFS trace from the cell adjacent to Start
             let traceR = startR + DIRS[requiredExitDirIndex].r;
             let traceC = startC + DIRS[requiredExitDirIndex].c;
+            let entryDir = DIRS[requiredExitDirIndex].opposite; 
             
-            // We need to trace from the first piece *to* the end.
-            const traceQueue = [{ r: traceR, c: traceC, entryDir: DIRS[requiredExitDirIndex].opposite }];
+            const traceQueue = [{ r: traceR, c: traceC, entryDir: entryDir }];
             visited.add(`${traceR},${traceC}`);
             pathCells.push(grid[traceR][traceC]);
             
             let successfulTrace = false;
 
             while (traceQueue.length > 0) {
-                const { r, c, entryDir } = traceQueue.shift();
+                const { r, c, entryDir: currentEntryDir } = traceQueue.shift();
                 const cell = grid[r][c];
-
+                
                 if (r === endCell.r && c === endCell.c) {
-                    // Check if the entry direction is successfully handled by the End pipe
-                    const connections = getCurrentConnections(cell);
-                    if (connections[entryDir]) {
-                        successfulTrace = true;
-                    }
+                    successfulTrace = true;
                     break; 
                 }
                 
+                // If we hit a non-path piece, we stop the trace here
+                if (!cell.isPath) break;
+
                 const connections = getCurrentConnections(cell);
 
-                // 1. Check if the current pipe accepts entry from the required direction
-                if (!connections[entryDir]) {
-                    // Mismatch: Pipe rotated incorrectly
+                // 1. Check if the current pipe accepts entry
+                if (!connections[currentEntryDir]) {
                     break;
                 }
 
-                // 2. Find the exit direction (must be a connection that isn't the entry direction)
+                // 2. Find the single exit direction (for non-cross pieces)
                 let exitDirIndex = -1;
                 for (let i = 0; i < 4; i++) {
-                    if (i !== entryDir && connections[i]) {
+                    if (i !== currentEntryDir && connections[i]) {
                         exitDirIndex = i;
                         break;
                     }
                 }
 
                 if (exitDirIndex === -1) {
-                    // Dead end, path broken
+                    // Dead end or cross/T junction needs further validation
+                    // For single-path puzzles, this means an incorrect rotation.
                     break;
                 }
 
@@ -3473,27 +3340,30 @@
                     const nextCell = grid[nextR][nextC];
                     const requiredEntryIndex = DIRS[exitDirIndex].opposite;
 
-                    // 3. Check if the next pipe accepts entry from the required direction
+                    // 3. Check if the next pipe accepts entry
                     const nextConnections = getCurrentConnections(nextCell);
                     
+                    if (nextR === endCell.r && nextC === endCell.c) {
+                        // Reached the end marker, successful trace if it links
+                        successfulTrace = true;
+                        break;
+                    }
+                    
                     if (nextConnections[requiredEntryIndex]) {
-                        // Successful link
+                        // Successful link, continue trace
                         if (!visited.has(`${nextR},${nextC}`)) {
                             visited.add(`${nextR},${nextC}`);
                             pathCells.push(nextCell);
                             traceQueue.push({ r: nextR, c: nextC, entryDir: requiredEntryIndex });
                         }
                     } else {
-                        // Next pipe is rotated wrong
-                        break;
+                        break; // Next pipe rotated wrong
                     }
                 } else {
-                    // Path goes off grid (error or open end)
-                    break;
+                    break; // Path goes off grid
                 }
             }
             
-            // 4. Update visualization
             document.querySelectorAll('.cell').forEach(el => el.classList.remove('on-path'));
 
             if (successfulTrace) {
@@ -3501,13 +3371,11 @@
                 document.getElementById('score-display').textContent = score;
                 document.getElementById('message').style.display = 'block';
                 
-                // Highlight solved path
                 pathCells.forEach(cell => {
                     const el = document.getElementById(`cell-${cell.r}-${cell.c}`);
                     if (el) el.classList.add('on-path');
                 });
                 
-                // Immediately generate the next level after a brief delay
                 setTimeout(() => {
                     document.getElementById('message').style.display = 'none';
                     increaseDifficulty();
@@ -3522,8 +3390,7 @@
 
         function handleCellClick(r, c) {
             const cell = grid[r][c];
-            if (cell.r === startCell.r && cell.c === startCell.c) return;
-            if (cell.r === endCell.r && cell.c === endCell.c) return;
+            if (cell.type === 0) return;
             
             cell.rotation = (cell.rotation + 1) % 4;
             moves++;
@@ -3531,9 +3398,9 @@
             
             const element = document.getElementById(`cell-${r}-${c}`);
             if (element) {
-                // Update rotation style instantly
                 const pipeVisual = element.querySelector('.pipe-visual');
                 pipeVisual.style.transform = `rotate(${cell.rotation * 90}deg)`;
+                element.classList.remove('on-path'); // Remove highlights if rotated
             }
 
             checkWin();
@@ -3544,7 +3411,6 @@
             document.documentElement.style.setProperty('--grid-size', GRID_SIZE);
             document.getElementById('difficulty-display').textContent = `${GRID_SIZE}x${GRID_SIZE}`;
             
-            // Reset moves display for new level
             document.getElementById('moves-display').textContent = 0;
 
             for (let r = 0; r < GRID_SIZE; r++) {
@@ -3582,23 +3448,19 @@
 
         function increaseDifficulty() {
             if (score % 3 === 0 && score > 0) {
-                // Every 3 puzzles, increase size
-                GRID_SIZE = Math.min(GRID_SIZE + 1, 12); // Cap at 12x12
+                GRID_SIZE = Math.min(GRID_SIZE + 1, 12);
             }
-            // Future extension: Introduce new pipe types or blockages based on score.
         }
 
         // --- INITIALIZATION ---
 
         function initGame() {
-            // Set initial state
             document.getElementById('score-display').textContent = score;
             document.getElementById('moves-display').textContent = moves;
             
             generatePuzzle();
         }
 
-        // Run the game!
         initGame();
     </script>
 </body>
@@ -3613,7 +3475,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Reaction Time Challenge</title>
+    <title>Hyper-Click</title>
     
     <style>
         /* Base Reset and Styling */
@@ -3646,7 +3508,15 @@
             position: absolute;
             opacity: 0;
             cursor: pointer;
-            transition: opacity 0.1s; /* Smooth visual transition for showing/hiding */
+            transition: opacity 0.1s;
+        }
+        
+        /* Scaling the target size based on viewport for responsiveness */
+        @media (max-width: 600px) {
+            #target {
+                width: 70px;
+                height: 70px;
+            }
         }
 
         /* Stats Panel */
@@ -3692,6 +3562,16 @@
             color: #00bcd4;
             margin-bottom: 10px;
         }
+        
+        @media (max-width: 600px) {
+             #message-overlay h1 {
+                font-size: 2em;
+            }
+             #message-overlay p {
+                font-size: 1.2em;
+            }
+        }
+
 
         #message-overlay p {
             font-size: 1.5em;
@@ -3736,7 +3616,7 @@
         <div id="target" onclick="targetClicked(event)"></div>
 
         <div id="message-overlay">
-            <h1>Reaction Time Challenge</h1>
+            <h1>Hyper-Click Challenge</h1>
             <p>Click the square as fast as you can. Be careful not to click the background!</p>
             <p id="final-message">Click anywhere to start the game.</p>
             <button id="start-button">Start Challenge</button>
@@ -3769,6 +3649,15 @@
         const MAX_DELAY = 3000; // 3 seconds
 
         /**
+         * Reads the current dynamic size of the target based on CSS media queries.
+         */
+        function getTargetSize() {
+             // We rely on getComputedStyle to read the real size set by CSS/media queries
+            const style = window.getComputedStyle(targetEl);
+            return parseInt(style.width);
+        }
+
+        /**
          * Initializes and starts a new game session.
          */
         function startGame() {
@@ -3794,7 +3683,7 @@
         function setupNewRound() {
             targetEl.style.opacity = 0;
             targetVisible = false;
-            gameAreaEl.style.cursor = 'pointer'; // Reset cursor
+            gameAreaEl.style.cursor = 'pointer';
             
             // Calculate random delay
             const delay = Math.random() * (MAX_DELAY - MIN_DELAY) + MIN_DELAY;
@@ -3808,10 +3697,10 @@
         function showTarget() {
             if (!gameRunning) return;
 
-            // 1. Set Random Position (Ensuring it stays within bounds)
+            // 1. Set Random Position 
             const areaWidth = gameAreaEl.clientWidth;
             const areaHeight = gameAreaEl.clientHeight;
-            const targetSize = 100; // 100px defined in CSS
+            const targetSize = getTargetSize();
 
             const maxX = areaWidth - targetSize;
             const maxY = areaHeight - targetSize;
@@ -3822,7 +3711,7 @@
             targetEl.style.left = `${randomX}px`;
             targetEl.style.top = `${randomY}px`;
             
-            // 2. Set Random Color (optional, but adds visual interest)
+            // 2. Set Random Color 
             const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
             targetEl.style.backgroundColor = randomColor;
 
@@ -3832,42 +3721,36 @@
             targetVisible = true;
             startTime = performance.now();
             
-            // 4. Set the failure timer (if the player misses the limit)
+            // 4. Set the failure timer
             timeoutHandle = setTimeout(() => {
-                // If this timeout fires, the player was too slow
                 gameOver(true);
             }, targetTimeLimit);
         }
 
         /**
          * Handles the successful click on the target square.
-         * @param {Event} event - The click event (to prevent propagation)
          */
         function targetClicked(event) {
-            event.stopPropagation(); // Prevent background handler from firing
+            event.stopPropagation();
 
             if (!gameRunning || !targetVisible) {
-                // If they click the space where the target WAS or if the game is paused
                 return; 
             }
 
-            // Clear the existing slow-click timeout
             clearTimeout(timeoutHandle);
             
             const reactionTime = performance.now() - startTime;
 
-            // Check if reaction time is within the limit
             if (reactionTime > targetTimeLimit) {
                 lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms (TOO SLOW!)`;
-                gameOver(true); // Slow failure
+                gameOver(true);
                 return;
             }
 
             // SUCCESS!
             score++;
-            targetTimeLimit = Math.max(50, targetTimeLimit - limitDecrement); // Limit cannot go below 50ms
+            targetTimeLimit = Math.max(50, targetTimeLimit - limitDecrement);
 
-            // Update display and proceed
             lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms`;
             updateDisplay();
             setupNewRound();
@@ -3875,33 +3758,27 @@
 
         /**
          * Handles the click on the background/game area.
-         * @param {Event} event - The click event
          */
         function backgroundClicked(event) {
-            // Check if the click originated on the main game area and not a stat element or the target itself
-            if (event.target.id !== 'game-area') {
+            if (event.target.id !== 'game-area' && event.target.id !== 'game-area-wrapper') {
                 return; 
             }
             
-            if (gameRunning) {
-                if (!targetVisible) {
-                    // Clicking while waiting for the target to appear is an immediate fail
-                    gameOver(false); 
-                } else {
-                    // Clicking the background while the target is visible is also a fail
-                    gameOver(false);
-                }
-            } else {
-                // If the game is not running, click starts the game (handled by overlay listener)
+            if (gameRunning && !targetVisible) {
+                // Clicking while waiting for the target to appear is an immediate fail
+                gameOver(false); 
             }
         }
 
         /**
          * Ends the game and displays the final score.
-         * @param {boolean} wasSlow - True if failure was due to slowness, False if due to clicking background.
          */
         function gameOver(wasSlow) {
-            if (!gameRunning) return;
+            if (!gameRunning && score === 0) { // Initial state setup
+                 gameRunning = false;
+            } else if (!gameRunning) {
+                return;
+            }
 
             gameRunning = false;
             targetVisible = false;
@@ -3910,7 +3787,6 @@
             targetEl.style.opacity = 0;
             gameAreaEl.style.cursor = 'default';
             
-            // Visual feedback for failure
             gameAreaEl.classList.add('failure');
 
             overlayEl.style.display = 'flex';
@@ -3926,8 +3802,6 @@
             `;
             
             document.getElementById('start-button').textContent = "Start Challenge";
-            
-            // Allow clicking anywhere on overlay to restart
             overlayEl.onclick = startGame; 
         }
 
@@ -3942,12 +3816,14 @@
         // Initialize: Ensure the overlay handles the first click to start
         document.addEventListener('DOMContentLoaded', () => {
              gameOver(false); // Set initial state
+             gameAreaEl.classList.remove('failure');
              finalMessageEl.innerHTML = `
                 <p>Click the square as fast as you can. Be careful not to click the background!</p>
                 <p>The time limit starts at 800ms and decreases by ${limitDecrement}ms every round.</p>
                 <p>Click START CHALLENGE to begin.</p>
             `;
             document.getElementById('start-button').textContent = "Start Challenge";
+            overlayEl.onclick = startGame; 
         });
 
     </script>
@@ -3963,7 +3839,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Snake Game</title>
+    <title>Coiled Destiny</title>
     <style>
         body {
             display: flex;
@@ -3978,13 +3854,17 @@
         }
 
         #game-container {
+            /* Fixed aspect ratio handled by 400x400 parent container scaling */
+            width: 400px; 
+            height: 400px;
             border: 5px solid #00f;
             box-shadow: 0 0 20px rgba(0, 0, 255, 0.7);
             background-color: #000;
+            position: relative;
         }
 
         #info-panel {
-            width: 400px; /* Match canvas width */
+            width: 400px;
             display: flex;
             justify-content: space-between;
             margin-bottom: 10px;
@@ -3998,10 +3878,10 @@
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            width: 400px;
-            height: 400px;
+            width: 100%;
+            height: 100%;
             background-color: rgba(0, 0, 0, 0.9);
-            border: 5px solid red;
+            border: none; /* Border is already on the container */
             z-index: 10;
         }
 
@@ -4038,7 +3918,7 @@
 </head>
 <body>
 
-    <h1>The Infinite Snake</h1>
+    <h1>Coiled Destiny</h1>
     
     <div id="info-panel">
         <div>Score: <span id="score">0</span></div>
@@ -4063,19 +3943,19 @@
         const CANVAS_SIZE = 400;
         const GRID_SIZE = 20; // 20x20 grid
         const CELL_SIZE = CANVAS_SIZE / GRID_SIZE; // 20px per cell
-        const INITIAL_SPEED_MS = 150; // Slower start
-        const SPEED_INCREASE_INTERVAL = 20; // Increase speed every 20 points
-        const SPEED_DECREMENT = 10; // Decrease interval by 10ms per level
+        const INITIAL_SPEED_MS = 150;
+        const SPEED_INCREASE_INTERVAL = 20;
+        const SPEED_DECREMENT = 10;
 
         // --- Game State Variables ---
         let canvas, ctx;
         let snake;
         let food;
-        let dx, dy; // Direction vector
+        let dx, dy;
         let score;
         let gameLoopInterval;
         let currentSpeed;
-        let isMoving; // Prevent immediate reverse direction
+        let isMoving;
         let gameRunning = false;
 
         // --- DOM Elements ---
@@ -4090,10 +3970,10 @@
             canvas = document.getElementById('game-board');
             ctx = canvas.getContext('2d');
             
-            // Wait for user input to start the first game
+            // Initial message set up
             gameOverScreen.style.display = 'flex';
             document.getElementById('final-score').innerText = 'N/A';
-            document.querySelector('#game-over-screen h1').innerText = 'SNAKE GAME';
+            document.querySelector('#game-over-screen h1').innerText = 'COILED DESTINY';
             document.querySelector('#game-over-screen p').innerText = 'Press Start to Play';
             document.querySelector('#game-over-screen button').innerText = 'Start Game';
         };
@@ -4102,8 +3982,8 @@
             if (gameRunning) return;
             
             // Reset state
-            snake = [{x: 10, y: 10}, {x: 9, y: 10}]; // Start with 2 segments
-            dx = 1; // Moving right
+            snake = [{x: 10, y: 10}, {x: 9, y: 10}];
+            dx = 1;
             dy = 0;
             score = 0;
             currentSpeed = INITIAL_SPEED_MS;
@@ -4116,23 +3996,21 @@
 
             spawnFood();
             
-            // Start the main loop
             startLoop();
 
-            // Set up keyboard listeners once
             document.removeEventListener('keydown', changeDirection); 
             document.addEventListener('keydown', changeDirection);
         }
 
         function startLoop() {
-            clearInterval(gameLoopInterval); // Clear any existing loop
+            clearInterval(gameLoopInterval);
             gameLoopInterval = setInterval(gameLoop, currentSpeed);
         }
 
         // --- Core Drawing and Movement ---
 
         function drawGrid() {
-            ctx.strokeStyle = '#020210'; // Dark blue grid lines
+            ctx.strokeStyle = '#020210';
             ctx.lineWidth = 0.5;
             for (let i = 0; i <= GRID_SIZE; i++) {
                 // Vertical lines
@@ -4162,7 +4040,7 @@
 
             // Draw Snake
             snake.forEach((segment, index) => {
-                ctx.fillStyle = index === 0 ? '#0F0' : '#090'; // Head is brighter green
+                ctx.fillStyle = index === 0 ? '#0F0' : '#090';
                 ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 
                 // Add border/style for defined segments
@@ -4172,7 +4050,7 @@
         }
 
         function moveSnake() {
-            if (!isMoving) return; // Wait for the next loop tick
+            if (!isMoving) return;
 
             // 1. Calculate new head position
             const newHead = {
@@ -4180,7 +4058,7 @@
                 y: snake[0].y + dy
             };
 
-            // 2. Check for Game Over conditions
+            // 2. Check for Game Over conditions (hitting walls or self)
             if (
                 newHead.x < 0 || 
                 newHead.x >= GRID_SIZE || 
@@ -4201,16 +4079,13 @@
                 scoreDisplay.innerText = score;
                 spawnFood();
 
-                // Check for speed increase (Infinite Concept)
+                // Check for speed increase
                 if (score > 0 && score % SPEED_INCREASE_INTERVAL === 0) {
-                    // Decrease interval time (increase speed)
                     currentSpeed = Math.max(50, currentSpeed - SPEED_DECREMENT);
                     
-                    // Display level (1 is base speed, +1 for every speed increase)
                     const level = 1 + Math.floor(score / SPEED_INCREASE_INTERVAL);
                     speedDisplay.innerText = level;
                     
-                    // Restart the loop with the new speed
                     startLoop();
                 }
             } else {
@@ -4218,7 +4093,7 @@
                 snake.pop();
             }
             
-            isMoving = true; // Allow new input on the next tick
+            isMoving = true;
         }
 
         function gameLoop() {
@@ -4245,7 +4120,6 @@
         }
 
         function checkSelfCollision(head) {
-            // Start checking from the second segment (index 1)
             for (let i = 1; i < snake.length; i++) {
                 if (head.x === snake[i].x && head.y === snake[i].y) {
                     return true;
@@ -4278,11 +4152,10 @@
                 newDx = 0; newDy = 1;
             }
 
-            // Only update direction if it changed
             if (newDx !== dx || newDy !== dy) {
                 dx = newDx;
                 dy = newDy;
-                isMoving = false; // Block further changes until the next move tick
+                isMoving = false;
             }
         }
 
@@ -4302,9 +4175,6 @@
 </html>
 
 --- END FILE: snake-game.html ---
---------------------------------------------
-rename/rebrand it to "mini arcade mania"
-make all the games and the whole website responsive and fit well in all screens.
-rename all the games in a witty yet user friendly way.
-make sure all the games are running OK,fine condition.
-make all the games playable in full screen in both desktop and mobile.
+---------------------------------------------
+look at the images here the games are not full screen, make them please.
+every game should have their own menu where play,resume,instructions should be there.

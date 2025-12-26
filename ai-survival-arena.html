@@ -10,20 +10,20 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            width: 100vw;
             margin: 0;
             background-color: #1a1a1a;
             font-family: sans-serif;
             overflow: hidden;
-            /* Ensure the game area itself is fixed to its desired aspect ratio */
         }
 
         #gameContainer {
             position: relative;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
             border: 2px solid #00ffff;
-            /* Fixed dimensions handled by parent iframe scaling */
-            width: 800px; 
-            height: 600px;
+            /* Full screen within IFRAME */
+            width: 100vw; 
+            height: 100vh;
         }
 
         #gameCanvas {
@@ -62,6 +62,7 @@
             font-size: 30px;
             display: none;
             pointer-events: all;
+            z-index: 400;
         }
 
         #restartButton {
@@ -79,15 +80,81 @@
         #restartButton:hover {
             background-color: #ffffff;
         }
+        
+        /* --- MENU OVERLAY STYLES --- */
+        #menu-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            display: flex; /* Display initially for start screen */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 500;
+            font-size: 1.5em;
+        }
+
+        #menu-overlay h2 {
+            color: #00ffff;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        #menu-overlay button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #00ffff;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        #menu-overlay button:hover {
+            background-color: #ffffff;
+        }
+        
+        #instructions-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            max-width: 80%;
+            font-size: 0.7em;
+            text-align: left;
+            display: none;
+        }
     </style>
 </head>
 <body>
 
 <div id="gameContainer">
-    <!-- Canvas dimensions are set by container and CSS, but logic uses fixed 800x600 constants -->
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas"></canvas>
     <div id="uiOverlay">
         Score: <span id="scoreDisplay">0</span>
+    </div>
+    
+    <!-- NEW MENU OVERLAY -->
+    <div id="menu-overlay">
+        <h2>Neon Grid Defender</h2>
+        <button id="btn-start" onclick="startGame()">Start Arena</button>
+        <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
+        <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+        <div id="instructions-box">
+            <h3>Controls & Goal:</h3>
+            <p><strong>Goal:</strong> Survive the enemy onslaught for as long as possible.</p>
+            <p><strong>Movement:</strong> WASD or Arrow Keys.</p>
+            <p><strong>Shoot:</strong> Click or Tap to fire projectiles in the mouse/tap direction.</p>
+            <p>Enemies scale in speed and spawn rate over time. Hitting an enemy ends the game.</p>
+            <p>Press ESC to pause/resume the game.</p>
+        </div>
     </div>
 
     <div id="gameOverScreen">
@@ -107,9 +174,15 @@
         const FINAL_SCORE = document.getElementById('finalScore');
         const RESTART_BUTTON = document.getElementById('restartButton');
 
-        // --- Game Constants (These define the logic grid, fixed at 800x600) ---
-        const CANVAS_WIDTH = 800;
-        const CANVAS_HEIGHT = 600;
+        // Menu Elements
+        const MENU_OVERLAY = document.getElementById('menu-overlay');
+        const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        const BTN_RESUME = document.getElementById('btn-resume');
+        const BTN_START = document.getElementById('btn-start'); 
+
+        // --- Game Constants (These define the logic grid, now dynamic) ---
+        let CANVAS_WIDTH = window.innerWidth;
+        let CANVAS_HEIGHT = window.innerHeight;
         const PLAYER_RADIUS = 10;
         const PROJECTILE_SPEED = 8;
         const PROJECTILE_SIZE = 2;
@@ -118,8 +191,8 @@
         let gameLoopId;
         let score = 0;
         let isGameOver = false;
+        let isGamePaused = true; // Start paused
         let keys = {};
-        let mousePos = { x: 0, y: 0 };
         let lastUpdateTime = 0;
         let lastEnemySpawnTime = 0;
         let baseEnemySpawnInterval = 2000; // ms
@@ -127,7 +200,48 @@
         let projectiles = [];
         let player = null;
 
-        // --- Utility Functions ---
+        // --- Utility Functions & Menu Logic ---
+        
+        function resizeCanvas() {
+            CANVAS_WIDTH = window.innerWidth;
+            CANVAS_HEIGHT = window.innerHeight;
+            canvas.width = CANVAS_WIDTH;
+            canvas.height = CANVAS_HEIGHT;
+
+            if (player) {
+                player.x = Math.max(player.radius, Math.min(CANVAS_WIDTH - player.radius, player.x));
+                player.y = Math.max(player.radius, Math.min(CANVAS_HEIGHT - player.radius, player.y));
+            }
+        }
+        window.addEventListener('resize', resizeCanvas);
+
+
+        function toggleInstructions() {
+            INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function pauseGame() {
+            if (isGameOver) return;
+            isGamePaused = true;
+            MENU_OVERLAY.style.display = 'flex';
+            BTN_START.style.display = 'none';
+            BTN_RESUME.style.display = 'block'; 
+            INSTRUCTIONS_BOX.style.display = 'none';
+        }
+
+        function resumeGame() {
+            if (isGameOver) return;
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+            lastUpdateTime = performance.now();
+            requestAnimationFrame(gameLoop);
+        }
+
+        function startGame() {
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+            initGame();
+        }
 
         /** Calculates distance between two points */
         function dist(x1, y1, x2, y2) {
@@ -152,7 +266,7 @@
             }
 
             update() {
-                if (isGameOver) return;
+                if (isGameOver || isGamePaused) return;
 
                 let dx = 0;
                 let dy = 0;
@@ -186,16 +300,14 @@
                 this.x = x;
                 this.y = y;
                 this.size = 15;
-                // Base speed scales up steadily over time
                 this.baseSpeed = 1.5;
-                this.speed = this.baseSpeed + (levelMultiplier * 0.2); // Scaling factor
+                this.speed = this.baseSpeed + (levelMultiplier * 0.2); 
                 this.color = '#ff4444';
                 this.active = true;
             }
 
-            // FSM: Chase State
             update() {
-                if (!this.active || !player) return;
+                if (!this.active || !player || isGamePaused) return;
 
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
@@ -229,7 +341,7 @@
             }
 
             update() {
-                if (!this.active) return;
+                if (!this.active || isGamePaused) return;
                 this.x += this.vx;
                 this.y += this.vy;
 
@@ -256,7 +368,8 @@
             enemies = [];
             projectiles = [];
             lastEnemySpawnTime = 0;
-            lastUpdateTime = performance.now();
+            
+            resizeCanvas(); 
             
             player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
             GAME_OVER_SCREEN.style.display = 'none';
@@ -264,15 +377,15 @@
             if (gameLoopId) {
                 cancelAnimationFrame(gameLoopId);
             }
+            lastUpdateTime = performance.now();
             gameLoopId = requestAnimationFrame(gameLoop);
         }
 
         function spawnEnemy(levelMultiplier) {
-            // Determine spawn point far outside the canvas edge
             let x, y;
             const buffer = 50;
 
-            const edge = Math.floor(Math.random() * 4); // 0: Top, 1: Bottom, 2: Left, 3: Right
+            const edge = Math.floor(Math.random() * 4); 
 
             switch (edge) {
                 case 0: // Top
@@ -297,7 +410,6 @@
         }
 
         function checkCollisions() {
-            // 1. Projectile vs Enemy Collision
             projectiles.forEach(p => {
                 if (!p.active) return;
                 
@@ -306,17 +418,15 @@
                     if (!e.active) continue;
 
                     if (dist(p.x, p.y, e.x, e.y) < e.size / 2 + p.radius) {
-                        // Collision! Destroy both.
                         p.active = false;
                         e.active = false;
                         score++;
                         UI_SCORE.textContent = score;
-                        break; // Projectile is used up
+                        break; 
                     }
                 }
             });
 
-            // Clean up inactive entities
             projectiles = projectiles.filter(p => p.active);
             enemies = enemies.filter(e => e.active);
         }
@@ -324,12 +434,9 @@
         function handleSpawningAndScaling(currentTime) {
             const timeElapsed = currentTime - lastUpdateTime;
             
-            // Calculate level multiplier based on game time (seconds)
             const gameTimeSeconds = Math.floor(currentTime / 1000);
-            const levelMultiplier = Math.floor(gameTimeSeconds / 10); // Increases every 10 seconds
+            const levelMultiplier = Math.floor(gameTimeSeconds / 10); 
 
-            // Calculate current required spawn interval (scales down over time)
-            // Minimum interval is 300ms
             const spawnInterval = Math.max(300, baseEnemySpawnInterval - (gameTimeSeconds * 50));
 
             if (currentTime - lastEnemySpawnTime > spawnInterval) {
@@ -339,7 +446,7 @@
         }
 
         function updateGame(currentTime) {
-            if (isGameOver) return;
+            if (isGameOver || isGamePaused) return;
 
             handleSpawningAndScaling(currentTime);
 
@@ -355,11 +462,12 @@
 
             projectiles.forEach(p => p.draw());
             enemies.forEach(e => e.draw());
-            player.draw();
+            if (player) player.draw();
         }
 
         function gameOver() {
             isGameOver = true;
+            isGamePaused = true;
             cancelAnimationFrame(gameLoopId);
             
             FINAL_SCORE.textContent = score;
@@ -367,10 +475,11 @@
         }
 
         function gameLoop(currentTime) {
-            lastUpdateTime = currentTime;
-
-            updateGame(currentTime);
-            drawGame();
+            if (!isGamePaused) {
+                updateGame(currentTime);
+                lastUpdateTime = currentTime; 
+            } 
+            drawGame(); 
 
             if (!isGameOver) {
                 gameLoopId = requestAnimationFrame(gameLoop);
@@ -379,26 +488,22 @@
 
         // --- Event Listeners ---
 
-        // Player shooting
         canvas.addEventListener('click', (event) => {
-            if (isGameOver || !player) return;
+            if (isGameOver || isGamePaused || !player) return;
 
-            // Get mouse position relative to canvas
             const rect = canvas.getBoundingClientRect();
             
-            // Scaling correction: Calculate the mouse position relative to the 800x600 logical grid
-            const mouseX = (event.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
-            const mouseY = (event.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
+            // Get click coordinates relative to the dynamically sized canvas
+            const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
+            const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
 
-            // Calculate direction vector from player to mouse
             const dx = mouseX - player.x;
             const dy = mouseY - player.y;
 
             const vector = normalize(dx, dy);
 
-            // Create projectile, launching from player center
             const p = new Projectile(
-                player.x + vector.x * (player.radius + 1), // Start just outside player edge
+                player.x + vector.x * (player.radius + 1), 
                 player.y + vector.y * (player.radius + 1),
                 vector.x * PROJECTILE_SPEED,
                 vector.y * PROJECTILE_SPEED
@@ -406,20 +511,24 @@
             projectiles.push(p);
         });
 
-        // Key Press Handling for smooth movement
+        // Key Press Handling for smooth movement and pausing
         document.addEventListener('keydown', (e) => {
-            keys[e.key.toLowerCase()] = true;
+            if (e.key.toLowerCase() === 'escape') {
+                isGamePaused ? resumeGame() : pauseGame();
+            } else if (!isGamePaused) {
+                keys[e.key.toLowerCase()] = true;
+            }
         });
 
         document.addEventListener('keyup', (e) => {
             keys[e.key.toLowerCase()] = false;
         });
 
-        // Restart Button
-        RESTART_BUTTON.addEventListener('click', initGame);
+        RESTART_BUTTON.addEventListener('click', startGame);
 
-        // Start the game initialization
-        initGame();
+        // --- Initial Setup ---
+        resizeCanvas();
+        requestAnimationFrame(gameLoop); 
     });
 </script>
 

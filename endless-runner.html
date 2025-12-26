@@ -15,12 +15,13 @@
             background-color: #f0f0f0;
             font-family: Arial, sans-serif;
             overflow: hidden;
+            width: 100vw;
         }
 
-        /* Game Container Styling (Fixed 800x250 aspect ratio) */
+        /* Game Container Styling (Full screen) */
         #game-container {
-            width: 800px;
-            height: 250px;
+            width: 100vw;
+            height: 100vh;
             border: 5px solid #333;
             background-color: #87ceeb; /* Sky */
             box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
@@ -46,7 +47,6 @@
             width: 30px;
             height: 30px;
             background-color: #ff4500;
-            bottom: 20px;
             left: 50px;
             border: 2px solid #a03000;
             z-index: 10;
@@ -105,6 +105,53 @@
             border: 1px solid #222;
             z-index: 5;
         }
+        
+        /* --- MENU OVERLAY STYLES --- */
+        #menu-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            display: flex; 
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 500;
+            font-size: 1.5em;
+        }
+
+        #menu-overlay h2 {
+            color: #87ceeb;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        #menu-overlay button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #87ceeb;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        #instructions-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            max-width: 80%;
+            font-size: 0.7em;
+            text-align: left;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -113,6 +160,21 @@
         <div id="ground"></div>
         <div id="player"></div>
         <div id="score-display">Score: 0.00s</div>
+
+        <!-- NEW MENU OVERLAY -->
+        <div id="menu-overlay">
+            <h2>The Pixel Dash</h2>
+            <button id="btn-start" onclick="startGame()">Start Dash</button>
+            <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
+            <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+            <div id="instructions-box">
+                <h3>Controls & Goal:</h3>
+                <p><strong>Goal:</strong> Survive by jumping over obstacles.</p>
+                <p><strong>Jump:</strong> Spacebar or clicking the screen.</p>
+                <p>The game speed continuously increases as time passes, making the gaps smaller relative to your speed.</p>
+                <p>Press ESC to pause/resume the game.</p>
+            </div>
+        </div>
 
         <div id="game-over-screen">
             <h2>GAME OVER</h2>
@@ -123,20 +185,21 @@
 
     <script>
         // --- GAME VARIABLES & STATE ---
-        const GAME_AREA_HEIGHT = 250;
+        let GAME_AREA_HEIGHT; // Dynamic height
         const GROUND_HEIGHT = 20;
         const PLAYER_SIZE = 30;
         const PLAYER_START_X = 50;
         const INITIAL_JUMP_VELOCITY = -13;
         const GRAVITY = 0.7;
-        const DIFFICULTY_SCALING_TIME = 10000; // Increase speed every 10 seconds (10000 ms)
-        const SPEED_INCREMENT = 1.5; // How much speed increases
+        const DIFFICULTY_SCALING_TIME = 10000; 
+        const SPEED_INCREMENT = 1.5; 
 
-        let gameSpeed = 6; // Initial speed (pixels per frame)
-        let playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+        let gameSpeed = 6; 
+        let playerY;
         let velocityY = 0;
         let isJumping = false;
         let isGameOver = true;
+        let isGamePaused = true; // Start paused
         let obstacles = [];
 
         let score = 0;
@@ -151,28 +214,67 @@
         const scoreDisplay = document.getElementById('score-display');
         const gameOverScreen = document.getElementById('game-over-screen');
         const finalScoreDisplay = document.getElementById('final-score');
+        
+        // Menu Elements
+        const MENU_OVERLAY = document.getElementById('menu-overlay');
+        const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        const BTN_RESUME = document.getElementById('btn-resume');
+        const BTN_START = document.getElementById('btn-start');
+
+        // --- Utility & Menu Functions ---
+        
+        function resizeGameArea() {
+            GAME_AREA_HEIGHT = window.innerHeight;
+            if (!isJumping) {
+                playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+                player.style.top = `${playerY}px`;
+            }
+        }
+        window.addEventListener('resize', resizeGameArea);
+        
+        function toggleInstructions() {
+            INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function resumeGame() {
+            if (isGameOver) return;
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+            lastFrameTime = Date.now(); 
+            gameLoop();
+        }
+
+        function pauseGame() {
+            if (isGameOver) return;
+            isGamePaused = true;
+            MENU_OVERLAY.style.display = 'flex';
+            BTN_START.style.display = 'none';
+            BTN_RESUME.style.display = 'block'; 
+            INSTRUCTIONS_BOX.style.display = 'none';
+        }
 
         // --- CORE GAME LOOP FUNCTIONS ---
 
         function startGame() {
-            // Reset state
             isGameOver = false;
+            isGamePaused = false;
             gameSpeed = 6;
             score = 0;
             obstacles = [];
+            
+            resizeGameArea(); 
+            
             lastFrameTime = Date.now();
             lastSpeedIncreaseTime = Date.now();
             playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
             velocityY = 0;
             isJumping = false;
 
-            // Clear existing obstacles from DOM
             document.querySelectorAll('.obstacle').forEach(o => o.remove());
             
-            // Hide game over screen
             gameOverScreen.style.display = 'none';
+            MENU_OVERLAY.style.display = 'none';
 
-            // Start game processes
             player.style.backgroundColor = '#ff4500';
             gameLoop();
             scheduleNextObstacle();
@@ -183,9 +285,13 @@
                 cancelAnimationFrame(animationFrameId);
                 return;
             }
+            if (isGamePaused) {
+                animationFrameId = requestAnimationFrame(gameLoop);
+                return;
+            }
 
             const now = Date.now();
-            const deltaTime = now - lastFrameTime; // Time elapsed since last frame
+            const deltaTime = now - lastFrameTime; 
             lastFrameTime = now;
 
             updateScore(deltaTime);
@@ -194,25 +300,22 @@
             updateObstacles();
             checkCollision();
 
-            // Request next frame
             animationFrameId = requestAnimationFrame(gameLoop);
         }
 
         // --- PLAYER MECHANICS ---
 
         function jump() {
-            if (!isJumping && !isGameOver) {
+            if (!isJumping && !isGameOver && !isGamePaused) { 
                 isJumping = true;
                 velocityY = INITIAL_JUMP_VELOCITY;
             }
         }
 
         function updatePlayer() {
-            // 1. Apply Gravity
             velocityY += GRAVITY;
             playerY += velocityY;
 
-            // 2. Check Ground Collision (y-axis)
             const groundY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
             if (playerY >= groundY) {
                 playerY = groundY;
@@ -220,14 +323,13 @@
                 isJumping = false;
             }
 
-            // 3. Update DOM position
             player.style.top = `${playerY}px`;
         }
 
         // --- OBSTACLE MECHANICS ---
 
         function spawnObstacle() {
-            if (isGameOver) return;
+            if (isGameOver || isGamePaused) return; 
 
             const minWidth = 15;
             const maxWidth = 50;
@@ -242,7 +344,6 @@
             obstacleEl.style.width = `${width}px`;
             obstacleEl.style.height = `${height}px`;
             
-            // Position obstacle at the right edge, sitting on the ground
             const startX = gameContainer.offsetWidth; 
             const startY = GAME_AREA_HEIGHT - GROUND_HEIGHT - height;
 
@@ -251,7 +352,6 @@
 
             gameContainer.appendChild(obstacleEl);
 
-            // Store object data for physics
             obstacles.push({
                 element: obstacleEl,
                 x: startX,
@@ -263,13 +363,19 @@
         }
 
         function scheduleNextObstacle() {
-            // Randomize spawn time for unpredictable difficulty
+            if (isGameOver) return;
             const minSpawnTime = 1000;
             const maxSpawnTime = 2500;
             const spawnDelay = Math.random() * (maxSpawnTime - minSpawnTime) + minSpawnTime;
             
             clearTimeout(obstacleSpawnTimeout);
-            obstacleSpawnTimeout = setTimeout(spawnObstacle, spawnDelay / (gameSpeed / 6)); // Shorter delay as speed increases
+            obstacleSpawnTimeout = setTimeout(() => {
+                if (!isGamePaused) {
+                    spawnObstacle();
+                } else {
+                    scheduleNextObstacle();
+                }
+            }, spawnDelay / (gameSpeed / 6)); 
         }
 
         function updateObstacles() {
@@ -278,19 +384,16 @@
             for (let i = 0; i < obstacles.length; i++) {
                 const obs = obstacles[i];
                 
-                // Move left based on current game speed
                 obs.x -= gameSpeed;
                 obs.element.style.left = `${obs.x}px`;
 
-                // Check if obstacle is still on screen
                 if (obs.x + obs.width > 0) {
                     newObstacles.push(obs);
                 } else {
-                    // Remove off-screen obstacles from the DOM
                     obs.element.remove();
                 }
             }
-            obstacles = newObstacles; // Update the active obstacle list
+            obstacles = newObstacles; 
         }
 
         // --- GAME LOGIC & SCORING ---
@@ -299,16 +402,17 @@
             if (now - lastSpeedIncreaseTime > DIFFICULTY_SCALING_TIME) {
                 gameSpeed += SPEED_INCREMENT;
                 lastSpeedIncreaseTime = now;
-                console.log(`Speed Increased! New speed: ${gameSpeed.toFixed(1)}`);
             }
         }
 
         function updateScore(deltaTime) {
-            score += deltaTime / 1000; // Convert milliseconds to seconds
+            score += deltaTime / 1000; 
             scoreDisplay.textContent = `Score: ${score.toFixed(2)}s`;
         }
 
         function checkCollision() {
+            if (!GAME_AREA_HEIGHT) return; 
+
             const pX = PLAYER_START_X;
             const pY = playerY;
             const pW = PLAYER_SIZE;
@@ -320,9 +424,8 @@
                 const oH = obs.height;
                 const oY = GAME_AREA_HEIGHT - GROUND_HEIGHT - oH;
 
-                // Collision Detection: Bounding Box Check
                 const overlapX = (pX < oX + oW) && (pX + pW > oX);
-                const overlapY = (pY + pH > oY); // Player bottom is below obstacle top
+                const overlapY = (pY + pH > oY); 
 
                 if (overlapX && overlapY) {
                     gameOver();
@@ -333,10 +436,11 @@
 
         function gameOver() {
             isGameOver = true;
+            isGamePaused = true;
             clearTimeout(obstacleSpawnTimeout);
             cancelAnimationFrame(animationFrameId);
 
-            player.style.backgroundColor = '#990000'; // Change color on death
+            player.style.backgroundColor = '#990000'; 
             
             finalScoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
             gameOverScreen.style.display = 'flex';
@@ -349,20 +453,23 @@
         // --- INITIALIZATION & EVENT LISTENERS ---
 
         function init() {
-            // Event listener for space bar and screen click
+            resizeGameArea(); 
+
             document.addEventListener('keydown', (e) => {
                 if (e.code === 'Space') {
-                    e.preventDefault(); // Prevent scrolling
+                    e.preventDefault(); 
                     jump();
+                } else if (e.key === 'Escape') {
+                    gameRunning && (isGamePaused ? resumeGame() : pauseGame());
                 }
             });
             gameContainer.addEventListener('click', jump);
 
-            // Start the game initially
-            startGame();
+            // Show menu initially
+            MENU_OVERLAY.style.display = 'flex';
+            requestAnimationFrame(gameLoop);
         }
 
-        // Wait for the DOM to be fully loaded before initializing
         window.onload = init;
 
     </script>

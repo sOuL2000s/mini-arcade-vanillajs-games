@@ -15,6 +15,7 @@
             display: flex;
             flex-direction: column;
             height: 100vh;
+            width: 100vw;
         }
 
         /* --- UI STYLES --- */
@@ -43,15 +44,14 @@
         .color-C { color: #ff0; } /* Commercial - Yellow */
         .color-I { color: #f00; } /* Industrial - Red */
 
-        /* --- GAME CONTAINER & SCROLLING --- */
+        /* --- GAME CONTAINER & SCROLLING (Full screen) --- */
         #game-container {
             flex-grow: 1;
             overflow: scroll;
             cursor: crosshair;
-            /* Center map roughly in view */
-            margin-top: calc(50vh - 50px);
-            margin-left: calc(50vw - 50px);
-            width: 100%; /* Ensure container fills the iframe */
+            margin-top: 0; 
+            margin-left: 0; 
+            width: 100%; 
             height: 100%;
         }
 
@@ -75,6 +75,53 @@
         .R { background-color: #00f; }
         .C { background-color: #ff0; }
         .I { background-color: #f00; }
+        
+        /* --- MENU OVERLAY STYLES --- */
+        #menu-overlay {
+            position: fixed; 
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            display: flex; 
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 600; 
+            font-size: 1.5em;
+        }
+
+        #menu-overlay h2 {
+            color: #ff0; 
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        #menu-overlay button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #ff0;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        #instructions-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            max-width: 80%;
+            font-size: 0.7em;
+            text-align: left;
+            display: none;
+        }
     </style>
 </head>
 <body>
@@ -84,6 +131,22 @@
         <p>Building: <span id="selected-type">Residential</span></p>
         <p class="key-hint">Keys: 1 (R), 2 (C), 3 (I)</p>
         <p class="key-hint">Click near bottom edge to expand map!</p>
+    </div>
+    
+    <!-- NEW MENU OVERLAY -->
+    <div id="menu-overlay">
+        <h2>Minimal Metropolis</h2>
+        <button id="btn-start" onclick="resumeGame()">Start City</button>
+        <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
+        <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+        <div id="instructions-box">
+            <h3>Controls & Goal:</h3>
+            <p><strong>Goal:</strong> Expand your metropolis by zoning land (R, C, I) endlessly.</p>
+            <p><strong>Zoning:</strong> Press 1 (Residential - Blue), 2 (Commercial - Yellow), or 3 (Industrial - Red).</p>
+            <p><strong>Build:</strong> Click an empty tile to place the selected zone type.</p>
+            <p>Score increases with every placement. Click near the bottom edge to expand the map.</p>
+            <p>Press ESC to pause/resume the game.</p>
+        </div>
     </div>
 
     <div id="game-container">
@@ -96,8 +159,8 @@
         // --- GAME CONSTANTS ---
         const TILE_SIZE = 30; // px
         const INITIAL_MAP_SIZE = 100; // 100x100 tiles initially
-        const EXPANSION_THRESHOLD = 10; // Expand if clicked within 10 tiles of edge
-        const EXPANSION_AMOUNT = 50; // How many tiles to add on expansion
+        const EXPANSION_THRESHOLD = 10; 
+        const EXPANSION_AMOUNT = 50; 
 
         const BUILDING_TYPES = {
             '1': { code: 'R', name: 'Residential', color: 'color-R' },
@@ -112,12 +175,37 @@
             gridSize: INITIAL_MAP_SIZE,
             isExpanding: false
         };
+        let isGamePaused = true; // Start paused
 
         // --- DOM REFERENCES ---
         const mapEl = document.getElementById('map');
         const containerEl = document.getElementById('game-container');
         const scoreDisplay = document.getElementById('score-display');
         const typeDisplay = document.getElementById('selected-type');
+        
+        // Menu Elements
+        const MENU_OVERLAY = document.getElementById('menu-overlay');
+        const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        const BTN_RESUME = document.getElementById('btn-resume');
+        const BTN_START = document.getElementById('btn-start');
+
+        // --- Menu Logic ---
+        function toggleInstructions() {
+            INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function resumeGame() {
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+        }
+
+        function pauseGame() {
+            isGamePaused = true;
+            MENU_OVERLAY.style.display = 'flex';
+            BTN_START.style.display = 'none';
+            BTN_RESUME.style.display = 'block'; 
+            INSTRUCTIONS_BOX.style.display = 'none';
+        }
 
         // --- UTILITY FUNCTIONS ---
 
@@ -133,7 +221,7 @@
         function changeBuilding(key) {
             if (BUILDING_TYPES[key]) {
                 state.currentTypeKey = key;
-                updateUI(); // Update UI to reflect type change
+                updateUI(); 
             }
         }
 
@@ -159,13 +247,13 @@
             mapEl.appendChild(fragment);
 
             // Center the initial view
-            const centerScroll = (state.gridSize / 2 * TILE_SIZE) - (window.innerWidth / 2);
-            containerEl.scrollLeft = centerScroll;
-            containerEl.scrollTop = centerScroll;
+            const centerScrollX = (state.gridSize / 2 * TILE_SIZE) - (window.innerWidth / 2);
+            const centerScrollY = (state.gridSize / 2 * TILE_SIZE) - (window.innerHeight / 2);
+            containerEl.scrollLeft = centerScrollX;
+            containerEl.scrollTop = centerScrollY;
         }
 
         // --- EXPANSION LOGIC ---
-
         function createTile(r, c) {
             const tile = document.createElement('div');
             tile.className = 'tile';
@@ -174,7 +262,6 @@
             return tile;
         }
 
-        // Simplified Expansion (Only expands downward)
         function checkAndExpandMap(r, c) {
             const size = state.gridSize;
 
@@ -184,7 +271,6 @@
                 const currentSize = state.gridSize;
                 const newSize = currentSize + EXPANSION_AMOUNT;
                 
-                // 1. Generate new tiles (new rows only)
                 const fragment = document.createDocumentFragment();
                 for (let row = currentSize; row < newSize; row++) {
                     for (let col = 0; col < currentSize; col++) {
@@ -193,14 +279,10 @@
                 }
                 mapEl.appendChild(fragment);
                 
-                // 2. Update state and dimensions
                 state.gridSize = newSize;
                 mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
                 mapEl.style.height = `${newSize * TILE_SIZE}px`;
                 
-                console.log(`Map expanded to ${newSize}x${currentSize}`);
-                
-                // Allow expansion again shortly
                 setTimeout(() => { state.isExpanding = false; }, 300);
             }
         }
@@ -209,27 +291,31 @@
         // --- EVENT HANDLERS ---
 
         function handleTileClick(event) {
+            if (isGamePaused) return; 
+
             const tile = event.target;
             if (!tile.classList.contains('tile')) return;
 
             const r = parseInt(tile.dataset.r);
             const c = parseInt(tile.dataset.c);
 
-            // Check if already built
             if (tile.dataset.built) return;
 
-            // Place Building
             const type = BUILDING_TYPES[state.currentTypeKey];
             tile.classList.add(type.code);
-            tile.dataset.built = true; // Mark as built
+            tile.dataset.built = true; 
             
             updateUI();
-
-            // Check if expansion is needed
             checkAndExpandMap(r, c);
         }
 
         function handleKeyDown(event) {
+            if (event.key === 'Escape') {
+                isGamePaused ? resumeGame() : pauseGame();
+                return;
+            }
+            if (isGamePaused) return; 
+
             const key = event.key;
             if (key === '1' || key === '2' || key === '3') {
                 changeBuilding(key);
@@ -239,18 +325,16 @@
         // --- INITIALIZATION ---
 
         function init() {
-            // Setup DOM event listeners
             mapEl.addEventListener('click', handleTileClick);
             document.addEventListener('keydown', handleKeyDown);
 
-            // Initialize the map grid
             setupInitialMap();
-
-            // Initial UI update
-            updateUI();
+            updateUI(); 
+            
+            // Show menu initially
+            MENU_OVERLAY.style.display = 'flex';
         }
 
-        // Start the game
         window.onload = init;
     </script>
 </body>

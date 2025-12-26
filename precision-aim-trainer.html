@@ -10,6 +10,7 @@
             margin: 0;
             padding: 0;
             height: 100%;
+            width: 100%;
             overflow: hidden;
             font-family: 'Arial', sans-serif;
             background-color: #1e1e2e;
@@ -32,7 +33,7 @@
         /* Game Area Styling (Uses 100% of the iframe window) */
         #game-area {
             width: 100%;
-            height: calc(100vh - 5vh - 2px); /* Full height minus HUD */
+            height: calc(100vh - 5vh - 2px); 
             background-color: #11111b;
             position: relative;
             overflow: hidden;
@@ -81,16 +82,57 @@
             z-index: 20;
             transition: opacity 0.3s;
         }
+        
+        /* --- MENU OVERLAY STYLES (Used for Pausing) --- */
+        #menu-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(30, 30, 46, 0.95);
+            color: #cdd6f4;
+            display: none; 
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 500;
+            font-size: 1.5em;
+        }
 
-        #overlay h1 {
-            font-size: 3em;
-            margin-bottom: 20px;
+        #menu-overlay h2 {
             color: #89b4fa;
+            font-size: 2.5em;
+            margin-bottom: 20px;
         }
-        #overlay p {
-            font-size: 1.2em;
-            margin: 10px 0;
+
+        #menu-overlay button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #b4befe;
+            color: #1e1e2e;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
         }
+        
+        #instructions-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            max-width: 80%;
+            font-size: 0.7em;
+            text-align: left;
+            display: none;
+        }
+
+        /* Existing #overlay elements */
+        #overlay h1 { font-size: 3em; color: #89b4fa; margin-bottom: 20px; }
+        #overlay p { font-size: 1.2em; margin: 10px 0; }
 
         #start-button {
             padding: 15px 30px;
@@ -118,6 +160,21 @@
 
     <div id="game-area">
         <div id="target"></div>
+        
+        <!-- PAUSE MENU OVERLAY -->
+        <div id="menu-overlay">
+            <h2>Game Paused</h2>
+            <button id="btn-resume" onclick="resumeGame()">Resume</button>
+            <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+            <div id="instructions-box">
+                <h3>Controls & Goal:</h3>
+                <p><strong>Goal:</strong> Click the target as fast as possible before time runs out.</p>
+                <p>Targets shrink and the visibility time decreases continuously to increase difficulty.</p>
+                <p>Missing the target or running out of time loses a life. Lose 3 lives to end the game.</p>
+                <p>Press ESC to pause/resume the game.</p>
+            </div>
+        </div>
+
         <div id="overlay">
             <h1>Vector Clicker</h1>
             <p id="overlay-text">Click the colored target as fast as possible to increase your score.</p>
@@ -129,18 +186,18 @@
 
     <script>
         // --- Game Constants and State ---
-        const INITIAL_TARGET_SIZE = 60; // Pixels
-        const MIN_TARGET_SIZE = 15; // Hard minimum size
-        const INITIAL_VISIBILITY_TIME = 1500; // Milliseconds
-        const MIN_VISIBILITY_TIME = 300; // Hard minimum time
+        const INITIAL_TARGET_SIZE = 60; 
+        const MIN_TARGET_SIZE = 15; 
+        const INITIAL_VISIBILITY_TIME = 1500; 
+        const MIN_VISIBILITY_TIME = 300; 
 
-        // Scaling Factors (Score-dependent difficulty)
         const SIZE_DECREMENT_FACTOR = 0.985;
         const TIME_DECREMENT_FACTOR = 0.99;
 
         let score = 0;
         let lives = 3;
         let gameActive = false;
+        let isGamePaused = true; // Start paused
         let targetTimer;
         let currentTargetTime = INITIAL_VISIBILITY_TIME;
         let currentTargetSize = INITIAL_TARGET_SIZE;
@@ -153,6 +210,33 @@
         const overlay = document.getElementById('overlay');
         const overlayText = document.getElementById('overlay-text');
         const startButton = document.getElementById('start-button');
+        
+        // Menu Elements
+        const MENU_OVERLAY = document.getElementById('menu-overlay');
+        const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+        const BTN_RESUME = document.getElementById('btn-resume');
+
+        // --- Menu Logic ---
+        function toggleInstructions() {
+            INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function resumeGame() {
+            if (!gameActive) return;
+            isGamePaused = false;
+            MENU_OVERLAY.style.display = 'none';
+            newTarget();
+        }
+
+        function pauseGame() {
+            if (!gameActive) return;
+            isGamePaused = true;
+            MENU_OVERLAY.style.display = 'flex';
+            INSTRUCTIONS_BOX.style.display = 'none';
+            
+            clearTimeout(targetTimer);
+            targetElement.style.display = 'none';
+        }
 
         // --- Utility Functions ---
 
@@ -162,11 +246,9 @@
         }
 
         function calculateDifficulty() {
-            // Calculate size
             let newSize = INITIAL_TARGET_SIZE * Math.pow(SIZE_DECREMENT_FACTOR, score);
             currentTargetSize = Math.max(newSize, MIN_TARGET_SIZE);
 
-            // Calculate time
             let newTime = INITIAL_VISIBILITY_TIME * Math.pow(TIME_DECREMENT_FACTOR, score);
             currentTargetTime = Math.max(newTime, MIN_VISIBILITY_TIME);
         }
@@ -181,7 +263,7 @@
         // --- Game Flow Functions ---
 
         function handleMiss() {
-            if (!gameActive) return;
+            if (!gameActive || isGamePaused) return;
 
             clearTimeout(targetTimer);
             lives--;
@@ -193,15 +275,13 @@
             if (lives <= 0) {
                 endGame();
             } else {
-                // Wait briefly for feedback before generating the next target
                 setTimeout(newTarget, 100);
             }
         }
 
         function handleHit(event) {
-            if (!gameActive) return;
+            if (!gameActive || isGamePaused) return;
 
-            // Ensure the click was exactly on the target element
             if (event.target !== targetElement) {
                 return;
             }
@@ -213,37 +293,30 @@
             flashFeedback(targetElement, 'target-hit');
             targetElement.style.display = 'none';
 
-            // Wait briefly for feedback before generating the next target
             setTimeout(newTarget, 100);
         }
 
         function newTarget() {
-            if (!gameActive) return;
+            if (!gameActive || isGamePaused) return; 
 
-            // 1. Calculate new difficulty based on current score
             calculateDifficulty();
 
-            // 2. Determine safe random position
             const gameWidth = gameArea.clientWidth;
             const gameHeight = gameArea.clientHeight;
 
-            // Ensure the target remains fully within the boundaries
             const maxX = gameWidth - currentTargetSize;
             const maxY = gameHeight - currentTargetSize;
 
             const randomX = Math.floor(Math.random() * maxX);
             const randomY = Math.floor(Math.random() * maxY);
 
-            // 3. Apply styles and position
             targetElement.style.width = `${currentTargetSize}px`;
             targetElement.style.height = `${currentTargetSize}px`;
             targetElement.style.left = `${randomX}px`;
             targetElement.style.top = `${randomY}px`;
             targetElement.style.display = 'block';
 
-            // 4. Set disappearance timer
             targetTimer = setTimeout(() => {
-                // If timer runs out, it's a miss
                 handleMiss();
             }, currentTargetTime);
         }
@@ -252,10 +325,11 @@
             score = 0;
             lives = 3;
             gameActive = true;
+            isGamePaused = false;
             updateHUD();
             overlay.style.display = 'none';
+            MENU_OVERLAY.style.display = 'none';
             
-            // Reset difficulty to initial state
             currentTargetSize = INITIAL_TARGET_SIZE;
             currentTargetTime = INITIAL_VISIBILITY_TIME;
 
@@ -264,6 +338,7 @@
 
         function endGame() {
             gameActive = false;
+            isGamePaused = true;
             clearTimeout(targetTimer);
             targetElement.style.display = 'none';
 
@@ -274,20 +349,22 @@
 
         // --- Event Listeners ---
 
-        // 1. Start Button Handler
+        document.addEventListener('keydown', (e) => {
+             if (e.key === 'Escape' && gameActive) {
+                isGamePaused ? resumeGame() : pauseGame();
+            }
+        });
+        
         startButton.addEventListener('click', startGame);
 
-        // 2. Target Hit Handler
         targetElement.addEventListener('click', handleHit);
 
-        // 3. Game Area Miss Handler
         gameArea.addEventListener('click', (event) => {
-            if (gameActive && event.target === gameArea) {
+            if (gameActive && !isGamePaused && event.target === gameArea) {
                 handleMiss();
             }
         });
 
-        // Initialize the HUD on load
         document.addEventListener('DOMContentLoaded', updateHUD);
     </script>
 

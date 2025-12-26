@@ -16,6 +16,7 @@
             justify-content: center;
             align-items: center;
             height: 100vh;
+            width: 100vw;
             background-color: #1a1a2e;
             color: #fff;
             cursor: pointer;
@@ -39,7 +40,6 @@
             transition: opacity 0.1s;
         }
         
-        /* Scaling the target size based on viewport for responsiveness */
         @media (max-width: 600px) {
             #target {
                 width: 70px;
@@ -116,6 +116,55 @@
             color: #fff;
             margin-top: 20px;
         }
+        
+        /* --- MENU OVERLAY STYLES (Used for Pausing) --- */
+        #menu-pause-overlay { 
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            color: #fff;
+            display: none; 
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 300; 
+            font-size: 1.5em;
+            cursor: default; 
+        }
+
+        #menu-pause-overlay h2 {
+            color: #00bcd4;
+            font-size: 2.5em;
+            margin-bottom: 20px;
+        }
+
+        #menu-pause-overlay button {
+            padding: 10px 20px;
+            margin: 10px;
+            font-size: 1em;
+            cursor: pointer;
+            background-color: #00bcd4;
+            color: #1a1a2e;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+        
+        #instructions-box {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 5px;
+            max-width: 80%;
+            font-size: 0.7em;
+            text-align: left;
+            display: none;
+        }
+
 
         .failure {
             background-color: #c70039 !important;
@@ -142,6 +191,21 @@
         </div>
 
         <div id="target" onclick="targetClicked(event)"></div>
+        
+        <!-- PAUSE MENU OVERLAY -->
+        <div id="menu-pause-overlay">
+            <h2>Game Paused</h2>
+            <button id="btn-resume" onclick="resumeGame()">Resume</button>
+            <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+            <div id="instructions-box">
+                <h3>Controls & Goal:</h3>
+                <p><strong>Goal:</strong> Click the target square the instant it appears, under the time limit.</p>
+                <p><strong>Time Limit:</strong> Starts at 800ms and decreases by 5ms every successful click. If you exceed the limit, you fail the challenge.</p>
+                <p><strong>Failure Condition 1:</strong> Clicking the gray background while waiting for the target to appear.</p>
+                <p><strong>Failure Condition 2:</strong> Failing to click the target before the time limit expires.</p>
+                <p>Press ESC to pause/resume the game.</p>
+            </div>
+        </div>
 
         <div id="message-overlay">
             <h1>Hyper-Click Challenge</h1>
@@ -161,108 +225,105 @@
         const lastTimeDisplayEl = document.getElementById('last-time-display');
         const finalMessageEl = document.getElementById('final-message');
         const gameAreaEl = document.getElementById('game-area');
+        
+        // Pause Menu Elements
+        const menuPauseOverlayEl = document.getElementById('menu-pause-overlay');
+        const instructionsBoxEl = document.getElementById('instructions-box');
+        const btnResumeEl = document.getElementById('btn-resume');
 
         // Game State Variables
         let score = 0;
-        let targetTimeLimit = 800; // Starting time limit in ms
-        const limitDecrement = 5; // How much the limit decreases per success
+        let targetTimeLimit = 800; 
+        const limitDecrement = 5; 
         
         let startTime = 0;
         let gameRunning = false;
         let targetVisible = false;
+        let isGamePaused = true; // Start paused
         let timeoutHandle = null;
 
         // Constants for Random Delays
-        const MIN_DELAY = 1000; // 1 second
-        const MAX_DELAY = 3000; // 3 seconds
+        const MIN_DELAY = 1000; 
+        const MAX_DELAY = 3000; 
+
+        // --- Menu & Pause Logic ---
+        
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && gameRunning) {
+                isGamePaused ? resumeGame() : pauseGame();
+            }
+        });
+
+        function toggleInstructions() {
+            instructionsBoxEl.style.display = instructionsBoxEl.style.display === 'block' ? 'none' : 'block';
+        }
+
+        function resumeGame() {
+            if (!gameRunning || !isGamePaused) return;
+            isGamePaused = false;
+            menuPauseOverlayEl.style.display = 'none';
+            // Restart the round logic immediately if paused while waiting for target
+            if (timeoutHandle === null) {
+                setupNewRound();
+            } else if (targetVisible) {
+                // If paused while target was visible, restart the time limit (being generous)
+                startTime = performance.now();
+                timeoutHandle = setTimeout(() => {
+                    gameOver(true);
+                }, targetTimeLimit);
+            } else {
+                 // If paused while waiting, setupNewRound will restart the delay timer
+                 setupNewRound();
+            }
+        }
+
+        function pauseGame() {
+            if (!gameRunning || isGamePaused) return;
+            isGamePaused = true;
+            menuPauseOverlayEl.style.display = 'flex';
+            clearTimeout(timeoutHandle);
+        }
 
         /**
          * Reads the current dynamic size of the target based on CSS media queries.
          */
         function getTargetSize() {
-             // We rely on getComputedStyle to read the real size set by CSS/media queries
             const style = window.getComputedStyle(targetEl);
             return parseInt(style.width);
         }
 
-        /**
-         * Initializes and starts a new game session.
-         */
-        function startGame() {
-            if (gameRunning) return;
-            
-            gameRunning = true;
-            score = 0;
-            targetTimeLimit = 800;
-            targetVisible = false;
-            
-            // Clear visual state
-            gameAreaEl.classList.remove('failure');
-            targetEl.style.opacity = 0;
-            overlayEl.style.display = 'none';
+        // --- Utility Functions ---
 
-            updateDisplay();
-            setupNewRound();
+        function updateDisplay() {
+            scoreDisplayEl.textContent = score;
+            timeLimitDisplayEl.textContent = `${targetTimeLimit} ms`;
         }
 
-        /**
-         * Sets up the waiting phase before the target appears.
-         */
-        function setupNewRound() {
-            targetEl.style.opacity = 0;
-            targetVisible = false;
-            gameAreaEl.style.cursor = 'pointer';
-            
-            // Calculate random delay
-            const delay = Math.random() * (MAX_DELAY - MIN_DELAY) + MIN_DELAY;
-            
-            timeoutHandle = setTimeout(showTarget, delay);
+        function flashFeedback(element, className) {
+            targetEl.classList.add(className);
+            setTimeout(() => {
+                targetEl.classList.remove(className);
+            }, 100);
         }
 
-        /**
-         * Makes the target visible in a random location and starts the timer.
-         */
-        function showTarget() {
-            if (!gameRunning) return;
+        // --- Game Flow Functions ---
 
-            // 1. Set Random Position 
-            const areaWidth = gameAreaEl.clientWidth;
-            const areaHeight = gameAreaEl.clientHeight;
-            const targetSize = getTargetSize();
+        function handleMiss() {
+            if (!gameRunning || isGamePaused) return;
 
-            const maxX = areaWidth - targetSize;
-            const maxY = areaHeight - targetSize;
-
-            const randomX = Math.floor(Math.random() * maxX);
-            const randomY = Math.floor(Math.random() * maxY);
-
-            targetEl.style.left = `${randomX}px`;
-            targetEl.style.top = `${randomY}px`;
+            clearTimeout(timeoutHandle);
             
-            // 2. Set Random Color 
-            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
-            targetEl.style.backgroundColor = randomColor;
-
-            // 3. Display target and start timer
-            targetEl.style.opacity = 1;
-            gameAreaEl.style.cursor = 'default';
-            targetVisible = true;
-            startTime = performance.now();
-            
-            // 4. Set the failure timer
-            timeoutHandle = setTimeout(() => {
-                gameOver(true);
-            }, targetTimeLimit);
+            // This game only has one "life" (the duration of the game session)
+            gameOver(true);
         }
 
-        /**
-         * Handles the successful click on the target square.
-         */
-        function targetClicked(event) {
+        function handleHit(event) {
             event.stopPropagation();
 
-            if (!gameRunning || !targetVisible) {
-                return; 
+            if (!gameRunning || isGamePaused || !targetVisible) return;
+
+            if (event.target !== targetEl) {
+                return;
             }
 
             clearTimeout(timeoutHandle);
@@ -278,37 +339,93 @@
             // SUCCESS!
             score++;
             targetTimeLimit = Math.max(50, targetTimeLimit - limitDecrement);
+            targetVisible = false;
 
             lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms`;
+            updateDisplay();
+
+            flashFeedback(targetEl, 'target-hit');
+            targetEl.style.opacity = 0;
+
+            // Wait briefly for feedback before setting up the next target
+            setTimeout(setupNewRound, 100);
+        }
+
+        function setupNewRound() {
+            if (!gameRunning || isGamePaused) return;
+
+            targetEl.style.opacity = 0;
+            targetVisible = false;
+            gameAreaEl.style.cursor = 'pointer';
+            
+            const delay = Math.random() * (MAX_DELAY - MIN_DELAY) + MIN_DELAY;
+            
+            timeoutHandle = setTimeout(showTarget, delay);
+        }
+
+        function showTarget() {
+            if (!gameRunning || isGamePaused) return;
+
+            clearTimeout(timeoutHandle); // Clear potential delay timer
+            
+            const areaWidth = gameAreaEl.clientWidth;
+            const areaHeight = gameAreaEl.clientHeight;
+            const targetSize = getTargetSize();
+
+            const maxX = areaWidth - targetSize;
+            const maxY = areaHeight - targetSize;
+
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+
+            targetEl.style.left = `${randomX}px`;
+            targetEl.style.top = `${randomY}px`;
+            
+            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+            targetEl.style.backgroundColor = randomColor;
+
+            targetEl.style.opacity = 1;
+            gameAreaEl.style.cursor = 'default';
+            targetVisible = true;
+            startTime = performance.now();
+            
+            // Set the failure timer
+            timeoutHandle = setTimeout(() => {
+                gameOver(true);
+            }, targetTimeLimit);
+        }
+
+        function startGame() {
+            score = 0;
+            gameRunning = true;
+            isGamePaused = false;
+            targetVisible = false;
+            targetTimeLimit = 800;
+            
+            gameAreaEl.classList.remove('failure');
+            overlayEl.style.display = 'none';
+            menuPauseOverlayEl.style.display = 'none';
+            lastTimeDisplayEl.textContent = '--';
+
             updateDisplay();
             setupNewRound();
         }
 
-        /**
-         * Handles the click on the background/game area.
-         */
         function backgroundClicked(event) {
-            if (event.target.id !== 'game-area' && event.target.id !== 'game-area-wrapper') {
+            if (event.target.id !== 'game-area') {
                 return; 
             }
             
-            if (gameRunning && !targetVisible) {
-                // Clicking while waiting for the target to appear is an immediate fail
+            if (gameRunning && !isGamePaused && !targetVisible) {
                 gameOver(false); 
             }
         }
 
-        /**
-         * Ends the game and displays the final score.
-         */
         function gameOver(wasSlow) {
-            if (!gameRunning && score === 0) { // Initial state setup
-                 gameRunning = false;
-            } else if (!gameRunning) {
-                return;
-            }
+            if (!gameRunning) return;
 
             gameRunning = false;
+            isGamePaused = true;
             targetVisible = false;
             clearTimeout(timeoutHandle);
             
@@ -320,7 +437,7 @@
             overlayEl.style.display = 'flex';
             
             let reasonText = wasSlow 
-                ? "You missed the time limit." 
+                ? "You ran out of time or were too slow." 
                 : "You clicked the background too early!";
                 
             finalMessageEl.innerHTML = `
@@ -330,20 +447,12 @@
             `;
             
             document.getElementById('start-button').textContent = "Start Challenge";
-            overlayEl.onclick = startGame; 
         }
 
-        /**
-         * Updates the score and time limit display elements.
-         */
-        function updateDisplay() {
-            scoreDisplayEl.textContent = score;
-            timeLimitDisplayEl.textContent = `${targetTimeLimit} ms`;
-        }
-
-        // Initialize: Ensure the overlay handles the first click to start
+        // --- INITIAL SETUP ---
         document.addEventListener('DOMContentLoaded', () => {
-             gameOver(false); // Set initial state
+             // Set initial state to display the starting menu via the gameOver function
+             gameOver(false); 
              gameAreaEl.classList.remove('failure');
              finalMessageEl.innerHTML = `
                 <p>Click the square as fast as you can. Be careful not to click the background!</p>
@@ -351,9 +460,11 @@
                 <p>Click START CHALLENGE to begin.</p>
             `;
             document.getElementById('start-button').textContent = "Start Challenge";
-            overlayEl.onclick = startGame; 
+            overlayEl.onclick = null; // Prevent background click from starting game immediately
+            startButton.addEventListener('click', startGame);
         });
 
     </script>
 </body>
 </html>
+

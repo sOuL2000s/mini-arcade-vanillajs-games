@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Starfall Dodgem</title>
-    <!-- All required CSS, structure, and JS are contained in this single file -->
 </head>
 <body>
 
@@ -19,13 +18,13 @@
         justify-content: center;
         align-items: center;
         height: 100vh;
+        width: 100vw;
     }
     #game-container {
         position: relative;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
-        /* Fixed dimensions handled by parent iframe scaling */
-        width: 800px;
-        height: 600px;
+        width: 100vw;
+        height: 100vh;
     }
     canvas {
         display: block;
@@ -78,6 +77,50 @@
     #restart-button:hover {
         background-color: #45a049;
     }
+    
+    /* --- NEW MENU STYLES --- */
+    #menu-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.95);
+        color: white;
+        display: flex; 
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        z-index: 500;
+        font-size: 1.5em;
+    }
+    #menu-overlay h2 {
+        color: #88C0D0;
+        font-size: 2.5em;
+        margin-bottom: 20px;
+    }
+    #menu-overlay button {
+        padding: 10px 20px;
+        margin: 10px;
+        font-size: 1em;
+        cursor: pointer;
+        background-color: #88C0D0;
+        color: #000;
+        border: none;
+        border-radius: 5px;
+        transition: background-color 0.3s;
+    }
+    #instructions-box {
+        margin-top: 20px;
+        padding: 15px;
+        background: rgba(255, 255, 255, 0.1);
+        border-radius: 5px;
+        max-width: 80%;
+        font-size: 0.7em;
+        text-align: left;
+        display: none;
+    }
 </style>
 
 <div id="game-container">
@@ -85,7 +128,22 @@
         Score: <span id="score-display">0</span> ms | Bullets: <span id="bullet-count">0</span>
         <div style="float: right;">Movement: WASD / Arrows</div>
     </div>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <canvas id="gameCanvas"></canvas>
+    
+    <!-- NEW MENU OVERLAY -->
+    <div id="menu-overlay">
+        <h2>Starfall Dodgem</h2>
+        <button id="btn-start" onclick="startGame()">Start Dodging</button>
+        <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
+        <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
+        <div id="instructions-box">
+            <h3>Controls & Goal:</h3>
+            <p><strong>Goal:</strong> Survive for the longest time possible.</p>
+            <p><strong>Movement:</strong> WASD or Arrow Keys.</p>
+            <p>The difficulty multiplier continuously increases, making bullets faster and spawn more aggressively.</p>
+            <p>Press ESC to pause/resume the game.</p>
+        </div>
+    </div>
 
     <div id="game-over-screen">
         <h1>GAME OVER</h1>
@@ -97,25 +155,23 @@
 
 <script>
     // --- Configuration ---
-    const CANVAS_WIDTH = 800;
-    const CANVAS_HEIGHT = 600;
+    let CANVAS_WIDTH;
+    let CANVAS_HEIGHT;
 
     // --- Game State Variables ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    // Canvas buffer sizes are fixed for consistent game logic
-    canvas.width = CANVAS_WIDTH; 
-    canvas.height = CANVAS_HEIGHT;
-
+    
     let gameRunning = false;
+    let isGamePaused = true; // Start paused
     let startTime;
     let score = 0;
     let frameCounter = 0;
     let difficultyMultiplier = 1.0;
 
     const player = {
-        x: CANVAS_WIDTH / 2,
-        y: CANVAS_HEIGHT / 2,
+        x: 0, 
+        y: 0,
         radius: 8,
         speed: 4,
         color: '#88C0D0'
@@ -133,13 +189,57 @@
     const finalScoreDisplay = document.getElementById('final-score');
     const finalDifficultyDisplay = document.getElementById('final-difficulty');
     const restartButton = document.getElementById('restart-button');
+    
+    // Menu Elements
+    const MENU_OVERLAY = document.getElementById('menu-overlay');
+    const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
+    const BTN_RESUME = document.getElementById('btn-resume');
+    const BTN_START = document.getElementById('btn-start'); 
+
+    // --- Dynamic Sizing and Menu Logic ---
+    
+    function resizeCanvas() {
+        CANVAS_WIDTH = window.innerWidth;
+        CANVAS_HEIGHT = window.innerHeight;
+        canvas.width = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+        
+        // Re-center player 
+        player.x = CANVAS_WIDTH / 2;
+        player.y = CANVAS_HEIGHT / 2;
+    }
+    window.addEventListener('resize', resizeCanvas);
+
+    function toggleInstructions() {
+        INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
+    }
+
+    function resumeGame() {
+        if (!gameRunning) return;
+        isGamePaused = false;
+        MENU_OVERLAY.style.display = 'none';
+        requestAnimationFrame(gameLoop);
+    }
+
+    function pauseGame() {
+        if (!gameRunning) return;
+        isGamePaused = true;
+        MENU_OVERLAY.style.display = 'flex';
+        BTN_START.style.display = 'none';
+        BTN_RESUME.style.display = 'block'; 
+        INSTRUCTIONS_BOX.style.display = 'none';
+    }
 
     // --- Input Handling ---
     document.addEventListener('keydown', (e) => {
-        if (gameRunning) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            gameRunning && (isGamePaused ? resumeGame() : pauseGame());
+            return;
+        }
+        if (gameRunning && !isGamePaused) {
             keys[e.key] = true;
-            // Prevent scrolling
-            if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+            if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key.toLowerCase())) {
                 e.preventDefault();
             }
         }
@@ -158,6 +258,8 @@
     // --- Core Game Functions ---
 
     function startGame() {
+        resizeCanvas(); 
+        
         // Reset state
         player.x = CANVAS_WIDTH / 2;
         player.y = CANVAS_HEIGHT / 2;
@@ -168,21 +270,23 @@
         startTime = performance.now();
 
         gameOverScreen.style.display = 'none';
-        gameRunning = true;
+        MENU_OVERLAY.style.display = 'none';
 
-        // Start the main loop
+        gameRunning = true;
+        isGamePaused = false;
+
         requestAnimationFrame(gameLoop);
     }
 
     function endGame() {
         gameRunning = false;
+        isGamePaused = true;
         const totalSurvivalTime = Math.floor(performance.now() - startTime);
         
         finalScoreDisplay.textContent = totalSurvivalTime;
         finalDifficultyDisplay.textContent = difficultyMultiplier.toFixed(2);
         
         gameOverScreen.style.display = 'flex';
-        // Clear any lingering key presses so movement doesn't trigger on restart
         for (let key in keys) {
             keys[key] = false;
         }
@@ -200,7 +304,6 @@
         if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= player.speed;
         if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += player.speed;
 
-        // Diagonal movement normalization (prevents faster diagonal movement)
         if (dx !== 0 && dy !== 0) {
             const magnitude = Math.sqrt(dx * dx + dy * dy);
             dx = (dx / magnitude) * player.speed;
@@ -216,7 +319,6 @@
     }
 
     function updateBullets() {
-        // Optimize: Use standard loop for high performance
         let i = bullets.length;
         while (i--) {
             const bullet = bullets[i];
@@ -229,7 +331,7 @@
             
             if (dist < player.radius + bullet.radius) {
                 endGame();
-                return; // Stop processing instantly on collision
+                return; 
             }
 
             // Remove bullets far outside the screen bounds
@@ -243,15 +345,11 @@
     }
 
     function updateDifficulty() {
-        // Difficulty scales by 0.15 every 5 seconds
         const elapsedSeconds = (performance.now() - startTime) / 1000;
         difficultyMultiplier = 1.0 + (elapsedSeconds / 5) * 0.15;
     }
 
-    // --- Bullet Spawning Functions ---
-
     function spawnBullet(startX, startY, angleRadians) {
-        // Base speed scaled by difficulty
         const speed = bulletBaseSpeed * difficultyMultiplier;
         
         bullets.push({
@@ -260,32 +358,25 @@
             radius: bulletBaseRadius,
             dx: Math.cos(angleRadians) * speed,
             dy: Math.sin(angleRadians) * speed,
-            color: '#FF4444' // Red bullets
+            color: '#FF4444' 
         });
     }
 
     function spawnPatterns() {
         const center = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
         
-        // Dynamic spawn rate (more bullets as difficulty increases)
         const spawnRate = Math.max(1, Math.floor(6 / difficultyMultiplier));
 
         if (frameCounter % spawnRate !== 0) return;
 
-        // Pattern 1: Expanding Spiral (0 to 180 frames)
         if ((frameCounter % 360) < 180) {
             const spiralAngle = (frameCounter * 0.1) % (2 * Math.PI);
             
             for (let i = 0; i < 3; i++) {
-                // Launch three bullets slightly spread out
                 spawnBullet(center.x, center.y, spiralAngle + i * 0.1);
             }
         }
-        // Pattern 2: Edge Waves / Target Streams (180 to 360 frames)
         else {
-            const streamSpeedMod = 0.5 + difficultyMultiplier * 0.5;
-
-            // Spawn from alternating corners
             let spawnX, spawnY;
             if (frameCounter % 4 === 0) {
                 spawnX = 0; spawnY = 0;
@@ -297,30 +388,24 @@
                 spawnX = CANVAS_WIDTH; spawnY = CANVAS_HEIGHT;
             }
 
-            // Calculate angle directly towards the player's current position
             const angleToPlayer = Math.atan2(player.y - spawnY, player.x - spawnX);
 
-            // Launch a stream aiming slightly ahead or behind based on time
             const wobble = Math.sin(frameCounter * 0.05) * 0.3;
             spawnBullet(spawnX, spawnY, angleToPlayer + wobble);
         }
-        
     }
 
     // --- Drawing Functions ---
 
     function draw() {
-        // Clear canvas
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // Draw Player
         ctx.beginPath();
         ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
         ctx.fillStyle = player.color;
         ctx.fill();
         
-        // Draw Bullets
         ctx.fillStyle = '#FF4444'; 
         for (const bullet of bullets) {
             ctx.beginPath();
@@ -339,22 +424,25 @@
 
     function gameLoop(timestamp) {
         if (!gameRunning) return;
-
-        frameCounter++;
         
-        updatePlayer();
-        updateDifficulty();
-        spawnPatterns();
-        updateBullets(); // This handles collision detection
+        if (!isGamePaused) { 
+            frameCounter++;
+            
+            updatePlayer();
+            updateDifficulty();
+            spawnPatterns();
+            updateBullets(); 
+            updateUI();
+        }
         
         draw();
-        updateUI();
 
         requestAnimationFrame(gameLoop);
     }
 
     // Initialize the game structure
-    startGame();
+    resizeCanvas();
+    requestAnimationFrame(gameLoop); 
 
 </script>
 
