@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Challenge</title>
+    
+    <style>
+        /* Base Reset and Styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a2e;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #game-area {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* Target Square Styling */
+        #target {
+            width: 100px;
+            height: 100px;
+            background-color: #ff6a3c;
+            border-radius: 10px;
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            transition: opacity 0.1s; /* Smooth visual transition for showing/hiding */
+        }
+
+        /* Stats Panel */
+        #stats {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            z-index: 100;
+            display: flex;
+            gap: 30px;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        .stat-item span {
+            display: block;
+            font-size: 0.8em;
+            color: #ccc;
+        }
+        
+        /* Message Overlay (Start/End Screen) */
+        #message-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        #message-overlay h1 {
+            font-size: 3em;
+            color: #00bcd4;
+            margin-bottom: 10px;
+        }
+
+        #message-overlay p {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            background-color: #ff6a3c;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.4em;
+            cursor: pointer;
+            color: #fff;
+            margin-top: 20px;
+        }
+
+        .failure {
+            background-color: #c70039 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-area" onclick="backgroundClicked(event)">
+        
+        <div id="stats">
+            <div class="stat-item">
+                <strong id="score-display">0</strong>
+                <span>Score</span>
+            </div>
+            <div class="stat-item">
+                <strong id="time-limit-display">800 ms</strong>
+                <span>Limit</span>
+            </div>
+            <div class="stat-item">
+                <strong id="last-time-display">--</strong>
+                <span>Last Reaction</span>
+            </div>
+        </div>
+
+        <div id="target" onclick="targetClicked(event)"></div>
+
+        <div id="message-overlay">
+            <h1>Reaction Time Challenge</h1>
+            <p>Click the square as fast as you can. Be careful not to click the background!</p>
+            <p id="final-message">Click anywhere to start the game.</p>
+            <button id="start-button">Start Challenge</button>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const targetEl = document.getElementById('target');
+        const overlayEl = document.getElementById('message-overlay');
+        const scoreDisplayEl = document.getElementById('score-display');
+        const timeLimitDisplayEl = document.getElementById('time-limit-display');
+        const lastTimeDisplayEl = document.getElementById('last-time-display');
+        const finalMessageEl = document.getElementById('final-message');
+        const gameAreaEl = document.getElementById('game-area');
+
+        // Game State Variables
+        let score = 0;
+        let targetTimeLimit = 800; // Starting time limit in ms
+        const limitDecrement = 5; // How much the limit decreases per success
+        
+        let startTime = 0;
+        let gameRunning = false;
+        let targetVisible = false;
+        let timeoutHandle = null;
+
+        // Constants for Random Delays
+        const MIN_DELAY = 1000; // 1 second
+        const MAX_DELAY = 3000; // 3 seconds
+
+        /**
+         * Initializes and starts a new game session.
+         */
+        function startGame() {
+            if (gameRunning) return;
+            
+            gameRunning = true;
+            score = 0;
+            targetTimeLimit = 800;
+            targetVisible = false;
+            
+            // Clear visual state
+            gameAreaEl.classList.remove('failure');
+            targetEl.style.opacity = 0;
+            overlayEl.style.display = 'none';
+
+            updateDisplay();
+            setupNewRound();
+        }
+
+        /**
+         * Sets up the waiting phase before the target appears.
+         */
+        function setupNewRound() {
+            targetEl.style.opacity = 0;
+            targetVisible = false;
+            gameAreaEl.style.cursor = 'pointer'; // Reset cursor
+            
+            // Calculate random delay
+            const delay = Math.random() * (MAX_DELAY - MIN_DELAY) + MIN_DELAY;
+            
+            timeoutHandle = setTimeout(showTarget, delay);
+        }
+
+        /**
+         * Makes the target visible in a random location and starts the timer.
+         */
+        function showTarget() {
+            if (!gameRunning) return;
+
+            // 1. Set Random Position (Ensuring it stays within bounds)
+            const areaWidth = gameAreaEl.clientWidth;
+            const areaHeight = gameAreaEl.clientHeight;
+            const targetSize = 100; // 100px defined in CSS
+
+            const maxX = areaWidth - targetSize;
+            const maxY = areaHeight - targetSize;
+
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+
+            targetEl.style.left = `${randomX}px`;
+            targetEl.style.top = `${randomY}px`;
+            
+            // 2. Set Random Color (optional, but adds visual interest)
+            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+            targetEl.style.backgroundColor = randomColor;
+
+            // 3. Display target and start timer
+            targetEl.style.opacity = 1;
+            gameAreaEl.style.cursor = 'default';
+            targetVisible = true;
+            startTime = performance.now();
+            
+            // 4. Set the failure timer (if the player misses the limit)
+            timeoutHandle = setTimeout(() => {
+                // If this timeout fires, the player was too slow
+                gameOver(true);
+            }, targetTimeLimit);
+        }
+
+        /**
+         * Handles the successful click on the target square.
+         * @param {Event} event - The click event (to prevent propagation)
+         */
+        function targetClicked(event) {
+            event.stopPropagation(); // Prevent background handler from firing
+
+            if (!gameRunning || !targetVisible) {
+                // If they click the space where the target WAS or if the game is paused
+                return; 
+            }
+
+            // Clear the existing slow-click timeout
+            clearTimeout(timeoutHandle);
+            
+            const reactionTime = performance.now() - startTime;
+
+            // Check if reaction time is within the limit
+            if (reactionTime > targetTimeLimit) {
+                lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms (TOO SLOW!)`;
+                gameOver(true); // Slow failure
+                return;
+            }
+
+            // SUCCESS!
+            score++;
+            targetTimeLimit = Math.max(50, targetTimeLimit - limitDecrement); // Limit cannot go below 50ms
+
+            // Update display and proceed
+            lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms`;
+            updateDisplay();
+            setupNewRound();
+        }
+
+        /**
+         * Handles the click on the background/game area.
+         * @param {Event} event - The click event
+         */
+        function backgroundClicked(event) {
+            // Check if the click originated on the main game area and not a stat element or the target itself
+            if (event.target.id !== 'game-area') {
+                return; 
+            }
+            
+            if (gameRunning) {
+                if (!targetVisible) {
+                    // Clicking while waiting for the target to appear is an immediate fail
+                    gameOver(false); 
+                } else {
+                    // Clicking the background while the target is visible is also a fail
+                    gameOver(false);
+                }
+            } else {
+                // If the game is not running, click starts the game (handled by overlay listener)
+            }
+        }
+
+        /**
+         * Ends the game and displays the final score.
+         * @param {boolean} wasSlow - True if failure was due to slowness, False if due to clicking background.
+         */
+        function gameOver(wasSlow) {
+            if (!gameRunning) return;
+
+            gameRunning = false;
+            targetVisible = false;
+            clearTimeout(timeoutHandle);
+            
+            targetEl.style.opacity = 0;
+            gameAreaEl.style.cursor = 'default';
+            
+            // Visual feedback for failure
+            gameAreaEl.classList.add('failure');
+
+            overlayEl.style.display = 'flex';
+            
+            let reasonText = wasSlow 
+                ? "You missed the time limit." 
+                : "You clicked the background too early!";
+                
+            finalMessageEl.innerHTML = `
+                <p>Game Over! ${reasonText}</p>
+                <h2>Final Score: ${score}</h2>
+                <p>Click START CHALLENGE to try again.</p>
+            `;
+            
+            document.getElementById('start-button').textContent = "Start Challenge";
+            
+            // Allow clicking anywhere on overlay to restart
+            overlayEl.onclick = startGame; 
+        }
+
+        /**
+         * Updates the score and time limit display elements.
+         */
+        function updateDisplay() {
+            scoreDisplayEl.textContent = score;
+            timeLimitDisplayEl.textContent = `${targetTimeLimit} ms`;
+        }
+
+        // Initialize: Ensure the overlay handles the first click to start
+        document.addEventListener('DOMContentLoaded', () => {
+             gameOver(false); // Set initial state
+             finalMessageEl.innerHTML = `
+                <p>Click the square as fast as you can. Be careful not to click the background!</p>
+                <p>The time limit starts at 800ms and decreases by ${limitDecrement}ms every round.</p>
+                <p>Click START CHALLENGE to begin.</p>
+            `;
+            document.getElementById('start-button').textContent = "Start Challenge";
+        });
+
+    </script>
+</body>
+</html>

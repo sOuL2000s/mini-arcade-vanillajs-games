@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vanilla JS Endless Runner</title>
+    <style>
+        /* Global Styles */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Game Container Styling */
+        #game-container {
+            width: 800px;
+            height: 250px;
+            border: 5px solid #333;
+            background-color: #87ceeb; /* Sky */
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden; /* Crucial for clipping obstacles */
+            cursor: pointer;
+        }
+
+        /* Ground Styling */
+        #ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background-color: #2e8b57; /* Darker Green */
+            border-top: 3px solid #1e623a;
+        }
+
+        /* Player Styling */
+        #player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #ff4500;
+            bottom: 20px; /* Starts on the ground */
+            left: 50px;
+            border: 2px solid #a03000;
+            z-index: 10;
+            transition: background-color 0.1s;
+        }
+
+        /* Score Display */
+        #score-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            text-shadow: 1px 1px 0 #fff;
+        }
+
+        /* Game Over Screen */
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 20;
+        }
+        #game-over-screen h2 {
+            margin-bottom: 5px;
+        }
+        #game-over-screen button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-top: 20px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #game-over-screen button:hover {
+            background-color: #45a049;
+        }
+
+        /* Obstacle base style (dynamic elements will inherit this) */
+        .obstacle {
+            position: absolute;
+            background-color: #444;
+            border: 1px solid #222;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ground"></div>
+        <div id="player"></div>
+        <div id="score-display">Score: 0.00s</div>
+
+        <div id="game-over-screen">
+            <h2>GAME OVER</h2>
+            <p id="final-score">Time Survived: 0.00s</p>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME VARIABLES & STATE ---
+        const GAME_AREA_HEIGHT = 250;
+        const GROUND_HEIGHT = 20;
+        const PLAYER_SIZE = 30;
+        const PLAYER_START_X = 50;
+        const INITIAL_JUMP_VELOCITY = -13;
+        const GRAVITY = 0.7;
+        const DIFFICULTY_SCALING_TIME = 10000; // Increase speed every 10 seconds (10000 ms)
+        const SPEED_INCREMENT = 1.5; // How much speed increases
+
+        let gameSpeed = 6; // Initial speed (pixels per frame)
+        let playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+        let velocityY = 0;
+        let isJumping = false;
+        let isGameOver = true;
+        let obstacles = [];
+
+        let score = 0;
+        let lastFrameTime = Date.now();
+        let lastSpeedIncreaseTime = Date.now();
+        let animationFrameId;
+        let obstacleSpawnTimeout;
+
+        // --- DOM ELEMENTS ---
+        const gameContainer = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // --- CORE GAME LOOP FUNCTIONS ---
+
+        function startGame() {
+            // Reset state
+            isGameOver = false;
+            gameSpeed = 6;
+            score = 0;
+            obstacles = [];
+            lastFrameTime = Date.now();
+            lastSpeedIncreaseTime = Date.now();
+            playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+            velocityY = 0;
+            isJumping = false;
+
+            // Clear existing obstacles from DOM
+            document.querySelectorAll('.obstacle').forEach(o => o.remove());
+            
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+
+            // Start game processes
+            player.style.backgroundColor = '#ff4500';
+            gameLoop();
+            scheduleNextObstacle();
+        }
+
+        function gameLoop() {
+            if (isGameOver) {
+                cancelAnimationFrame(animationFrameId);
+                return;
+            }
+
+            const now = Date.now();
+            const deltaTime = now - lastFrameTime; // Time elapsed since last frame
+            lastFrameTime = now;
+
+            updateScore(deltaTime);
+            checkSpeedScaling(now);
+            updatePlayer();
+            updateObstacles();
+            checkCollision();
+
+            // Request next frame
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- PLAYER MECHANICS ---
+
+        function jump() {
+            if (!isJumping && !isGameOver) {
+                isJumping = true;
+                velocityY = INITIAL_JUMP_VELOCITY;
+            }
+        }
+
+        function updatePlayer() {
+            // 1. Apply Gravity
+            velocityY += GRAVITY;
+            playerY += velocityY;
+
+            // 2. Check Ground Collision (y-axis)
+            const groundY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+            if (playerY >= groundY) {
+                playerY = groundY;
+                velocityY = 0;
+                isJumping = false;
+            }
+
+            // 3. Update DOM position
+            player.style.top = `${playerY}px`;
+        }
+
+        // --- OBSTACLE MECHANICS ---
+
+        function spawnObstacle() {
+            if (isGameOver) return;
+
+            const minWidth = 15;
+            const maxWidth = 50;
+            const minHeight = 20;
+            const maxHeight = 60;
+
+            const width = Math.floor(Math.random() * (maxWidth - minWidth + 1)) + minWidth;
+            const height = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+            
+            const obstacleEl = document.createElement('div');
+            obstacleEl.className = 'obstacle';
+            obstacleEl.style.width = `${width}px`;
+            obstacleEl.style.height = `${height}px`;
+            
+            // Position obstacle at the right edge, sitting on the ground
+            const startX = gameContainer.offsetWidth; 
+            const startY = GAME_AREA_HEIGHT - GROUND_HEIGHT - height;
+
+            obstacleEl.style.left = `${startX}px`;
+            obstacleEl.style.top = `${startY}px`;
+
+            gameContainer.appendChild(obstacleEl);
+
+            // Store object data for physics
+            obstacles.push({
+                element: obstacleEl,
+                x: startX,
+                width: width,
+                height: height
+            });
+            
+            scheduleNextObstacle();
+        }
+
+        function scheduleNextObstacle() {
+            // Randomize spawn time for unpredictable difficulty
+            const minSpawnTime = 1000;
+            const maxSpawnTime = 2500;
+            const spawnDelay = Math.random() * (maxSpawnTime - minSpawnTime) + minSpawnTime;
+            
+            clearTimeout(obstacleSpawnTimeout);
+            obstacleSpawnTimeout = setTimeout(spawnObstacle, spawnDelay / (gameSpeed / 6)); // Shorter delay as speed increases
+        }
+
+        function updateObstacles() {
+            const newObstacles = [];
+            
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                
+                // Move left based on current game speed
+                obs.x -= gameSpeed;
+                obs.element.style.left = `${obs.x}px`;
+
+                // Check if obstacle is still on screen
+                if (obs.x + obs.width > 0) {
+                    newObstacles.push(obs);
+                } else {
+                    // Remove off-screen obstacles from the DOM
+                    obs.element.remove();
+                }
+            }
+            obstacles = newObstacles; // Update the active obstacle list
+        }
+
+        // --- GAME LOGIC & SCORING ---
+
+        function checkSpeedScaling(now) {
+            if (now - lastSpeedIncreaseTime > DIFFICULTY_SCALING_TIME) {
+                gameSpeed += SPEED_INCREMENT;
+                lastSpeedIncreaseTime = now;
+                console.log(`Speed Increased! New speed: ${gameSpeed.toFixed(1)}`);
+            }
+        }
+
+        function updateScore(deltaTime) {
+            score += deltaTime / 1000; // Convert milliseconds to seconds
+            scoreDisplay.textContent = `Score: ${score.toFixed(2)}s`;
+        }
+
+        function checkCollision() {
+            const pX = PLAYER_START_X;
+            const pY = playerY;
+            const pW = PLAYER_SIZE;
+            const pH = PLAYER_SIZE;
+
+            for (const obs of obstacles) {
+                const oX = obs.x;
+                const oW = obs.width;
+                const oH = obs.height;
+                const oY = GAME_AREA_HEIGHT - GROUND_HEIGHT - oH;
+
+                // Collision Detection: Bounding Box Check
+                const overlapX = (pX < oX + oW) && (pX + pW > oX);
+                const overlapY = (pY + pH > oY); // Player bottom is below obstacle top
+
+                if (overlapX && overlapY) {
+                    gameOver();
+                    return;
+                }
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            clearTimeout(obstacleSpawnTimeout);
+            cancelAnimationFrame(animationFrameId);
+
+            player.style.backgroundColor = '#990000'; // Change color on death
+            
+            finalScoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        // --- INITIALIZATION & EVENT LISTENERS ---
+
+        function init() {
+            // Event listener for space bar and screen click
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault(); // Prevent scrolling
+                    jump();
+                }
+            });
+            gameContainer.addEventListener('click', jump);
+
+            // Start the game initially
+            startGame();
+        }
+
+        // Wait for the DOM to be fully loaded before initializing
+        window.onload = init;
+
+    </script>
+</body>
+</html>

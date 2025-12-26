@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Space Survival</title>
+    <style>
+        /* CORE SETUP */
+        body {
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            cursor: none; /* Hide cursor for immersion */
+        }
+
+        .game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+        }
+
+        /* HUD STYLING */
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            z-index: 100;
+            display: flex;
+            gap: 40px;
+            font-size: 1.2em;
+        }
+
+        /* PLAYER STYLING (Triangle Spaceship) */
+        #player {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-bottom: 24px solid #00ffff; /* Cyan color */
+            transition: border-bottom 0.1s ease; /* For flashing when hit */
+            z-index: 50;
+        }
+
+        .hit-flash {
+            border-bottom: 24px solid #ff0000 !important; /* Red flash */
+        }
+
+        /* ASTEROID STYLING */
+        .asteroid {
+            position: absolute;
+            background-color: #555;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+            z-index: 20;
+        }
+
+        /* GAME OVER SCREEN */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 200;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        #game-over-screen h1 {
+            color: #ff4444;
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        #game-over-screen p {
+            font-size: 1.5em;
+            margin: 10px 0;
+        }
+
+        #restart-button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            margin-top: 30px;
+            transition: background-color 0.2s;
+        }
+
+        #restart-button:hover {
+            background-color: #00cc00;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container" id="game-container">
+        <!-- Heads Up Display -->
+        <div id="hud">
+            <div id="score-display">Time Survived: 0.0s</div>
+            <div id="hp-display">HP: 3</div>
+        </div>
+
+        <!-- Player Spaceship -->
+        <div id="player"></div>
+
+        <!-- Game Over Overlay -->
+        <div id="game-over-screen">
+            <h1>SYSTEM FAILURE</h1>
+            <p>You have been consumed by the void.</p>
+            <p id="final-score"></p>
+            <button id="restart-button" onclick="initGame()">Restart Mission</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS AND STATE ---
+        const GAME_SPEED = 60; // Target FPS for smoother interpolation
+        const PLAYER_SPEED = 5;
+        const ASTEROID_SPAWN_RATE = 1500; // milliseconds
+        const COLLISION_RADIUS_FACTOR = 0.8; // Fudge factor for collision
+
+        let gameState = 'ready'; // ready, running, gameover
+        let lastTime = 0;
+        let score = 0;
+        let asteroidTimer = 0;
+        let asteroids = [];
+        let keys = {};
+
+        const player = {
+            element: document.getElementById('player'),
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+            width: 24, // Matches CSS border size
+            height: 24,
+            radius: 12,
+            hp: 3,
+            rotation: 0
+        };
+
+        // --- DOM REFERENCES ---
+        const gameContainer = document.getElementById('game-container');
+        const scoreDisplay = document.getElementById('score-display');
+        const hpDisplay = document.getElementById('hp-display');
+        const gameOverScreen = document.getElementById('game-over-screen');
+
+        // --- INPUT HANDLING ---
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // --- GAME INITIALIZATION & LOOP CONTROL ---
+
+        function initGame() {
+            // Reset state
+            gameState = 'running';
+            player.hp = 3;
+            score = 0;
+            asteroids = [];
+            asteroidTimer = 0;
+            
+            // Clear existing asteroids from DOM
+            document.querySelectorAll('.asteroid').forEach(a => a.remove());
+
+            // Reset player position
+            player.x = window.innerWidth / 2;
+            player.y = window.innerHeight / 2;
+            
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+            
+            updateHUD();
+            
+            // Start the main loop
+            if (gameState === 'running') {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function gameLoop(currentTime) {
+            if (gameState !== 'running') return;
+
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Update game logic based on elapsed time
+            updatePlayer(deltaTime);
+            updateAsteroids(deltaTime);
+            checkCollisions();
+            spawnAsteroid(deltaTime);
+            updateScore(deltaTime);
+            updateHUD();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            gameOverScreen.style.display = 'flex';
+            document.getElementById('final-score').textContent = 
+                `Time survived: ${score.toFixed(2)} seconds.`;
+        }
+
+        // --- PLAYER LOGIC ---
+
+        function updatePlayer(deltaTime) {
+            let dx = 0;
+            let dy = 0;
+
+            if (keys['w'] || keys['arrowup']) dy -= PLAYER_SPEED;
+            if (keys['s'] || keys['arrowdown']) dy += PLAYER_SPEED;
+            if (keys['a'] || keys['arrowleft']) dx -= PLAYER_SPEED;
+            if (keys['d'] || keys['arrowright']) dx += PLAYER_SPEED;
+
+            // Normalize diagonal movement (Pythagorean theorem)
+            if (dx !== 0 && dy !== 0) {
+                const magnitude = Math.sqrt(dx * dx + dy * dy);
+                dx = (dx / magnitude) * PLAYER_SPEED;
+                dy = (dy / magnitude) * PLAYER_SPEED;
+            }
+
+            player.x += dx;
+            player.y += dy;
+
+            // Keep player within bounds
+            player.x = Math.max(player.width / 2, Math.min(window.innerWidth - player.width / 2, player.x));
+            player.y = Math.max(player.height / 2, Math.min(window.innerHeight - player.height / 2, player.y));
+            
+            // Calculate rotation based on movement direction (for a basic ship look)
+            if (dx !== 0 || dy !== 0) {
+                player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
+            }
+
+            // Apply transformation to the DOM element
+            player.element.style.transform = 
+                `translate(-50%, -50%) translate(${player.x}px, ${player.y}px) rotate(${player.rotation}deg)`;
+        }
+
+        function playerHit() {
+            if (gameState !== 'running') return;
+            
+            player.hp--;
+            
+            // Flash red on hit
+            player.element.classList.add('hit-flash');
+            setTimeout(() => {
+                player.element.classList.remove('hit-flash');
+            }, 100);
+
+            if (player.hp <= 0) {
+                gameOver();
+            }
+        }
+
+        // --- ASTEROID LOGIC ---
+
+        function createAsteroid() {
+            const size = 20 + Math.random() * 40; // 20px to 60px
+            const speed = 1 + Math.random() * 2; 
+
+            let startX, startY, vx, vy;
+
+            // Randomly choose an edge (0: Top, 1: Right, 2: Bottom, 3: Left)
+            const edge = Math.floor(Math.random() * 4);
+
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+
+            // Determine spawn coordinates (just outside the screen) and velocity vector
+            switch (edge) {
+                case 0: // Top
+                    startX = Math.random() * screenW;
+                    startY = -size;
+                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
+                    vy = speed;
+                    break;
+                case 1: // Right
+                    startX = screenW + size;
+                    startY = Math.random() * screenH;
+                    vx = -speed;
+                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
+                    break;
+                case 2: // Bottom
+                    startX = Math.random() * screenW;
+                    startY = screenH + size;
+                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
+                    vy = -speed;
+                    break;
+                case 3: // Left
+                    startX = -size;
+                    startY = Math.random() * screenH;
+                    vx = speed;
+                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
+                    break;
+            }
+
+            const asteroidElement = document.createElement('div');
+            asteroidElement.classList.add('asteroid');
+            asteroidElement.style.width = `${size}px`;
+            asteroidElement.style.height = `${size}px`;
+            gameContainer.appendChild(asteroidElement);
+
+            const newAsteroid = {
+                element: asteroidElement,
+                id: Date.now() + Math.random(),
+                x: startX,
+                y: startY,
+                radius: size / 2,
+                vx: vx,
+                vy: vy,
+                speed: speed
+            };
+            
+            asteroids.push(newAsteroid);
+        }
+
+        function spawnAsteroid(deltaTime) {
+            asteroidTimer += deltaTime;
+            if (asteroidTimer >= ASTEROID_SPAWN_RATE) {
+                createAsteroid();
+                asteroidTimer = 0;
+            }
+        }
+
+        function updateAsteroids(deltaTime) {
+            const toRemove = [];
+
+            for (let i = 0; i < asteroids.length; i++) {
+                const asteroid = asteroids[i];
+                
+                // Move asteroid
+                asteroid.x += asteroid.vx * deltaTime * 0.05;
+                asteroid.y += asteroid.vy * deltaTime * 0.05;
+
+                // Update DOM position
+                asteroid.element.style.left = `${asteroid.x - asteroid.radius}px`;
+                asteroid.element.style.top = `${asteroid.y - asteroid.radius}px`;
+
+                // Check if asteroid is outside bounds
+                if (asteroid.x < -asteroid.radius * 2 || 
+                    asteroid.x > window.innerWidth + asteroid.radius * 2 ||
+                    asteroid.y < -asteroid.radius * 2 || 
+                    asteroid.y > window.innerHeight + asteroid.radius * 2) {
+                    toRemove.push(i);
+                }
+            }
+            
+            // Remove off-screen asteroids (in reverse order to maintain index integrity)
+            for (let i = toRemove.length - 1; i >= 0; i--) {
+                const index = toRemove[i];
+                asteroids[index].element.remove();
+                asteroids.splice(index, 1);
+            }
+        }
+
+        // --- COLLISION DETECTION ---
+
+        function checkCollisions() {
+            // Player collision point (center of the bounding box)
+            const pCenterX = player.x;
+            const pCenterY = player.y;
+            const pRadius = player.radius * COLLISION_RADIUS_FACTOR;
+
+            for (let i = 0; i < asteroids.length; i++) {
+                const asteroid = asteroids[i];
+                const aRadius = asteroid.radius * COLLISION_RADIUS_FACTOR;
+
+                // Calculate distance between centers
+                const dx = pCenterX - asteroid.x;
+                const dy = pCenterY - asteroid.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Collision occurred
+                if (distance < pRadius + aRadius) {
+                    playerHit();
+
+                    // Remove the hit asteroid
+                    asteroid.element.remove();
+                    asteroids.splice(i, 1);
+                    i--; // Decrement index since we removed an element
+                }
+            }
+        }
+
+        // --- HUD AND SCORE ---
+
+        function updateScore(deltaTime) {
+            score += deltaTime / 1000;
+        }
+
+        function updateHUD() {
+            scoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
+            
+            let hpText = 'HP: ';
+            for (let i = 0; i < player.hp; i++) {
+                hpText += '❤️ ';
+            }
+            hpDisplay.textContent = hpText;
+        }
+
+        // --- INITIAL SETUP ---
+        window.onload = () => {
+            // Ensure player is centered initially (CSS handles the translation transformation)
+            player.element.style.left = '0px';
+            player.element.style.top = '0px'; 
+            
+            // Start the game immediately when the page loads
+            initGame();
+        };
+
+        // Handle window resizing to keep bounds correct (though player position might shift slightly)
+        window.addEventListener('resize', () => {
+            if (gameState === 'running') {
+                // Re-center player if necessary upon resize
+                player.x = Math.min(player.x, window.innerWidth - player.width / 2);
+                player.y = Math.min(player.y, window.innerHeight - player.height / 2);
+            }
+        });
+
+    </script>
+</body>
+</html>

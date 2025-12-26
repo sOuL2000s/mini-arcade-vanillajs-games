@@ -1,0 +1,418 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Survival Arena</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            border: 2px solid #00ffff;
+        }
+
+        #gameCanvas {
+            display: block;
+            background-color: #000000;
+        }
+
+        #uiOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows mouse clicks to pass through */
+            color: #00ffff;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 20px;
+        }
+
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: #ff4444;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 30px;
+            display: none; /* Hidden initially */
+            pointer-events: all; /* Important to allow restart button clicks */
+        }
+
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 24px;
+            cursor: pointer;
+            background-color: #00ffff;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        #restartButton:hover {
+            background-color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="uiOverlay">
+        Score: <span id="scoreDisplay">0</span>
+    </div>
+
+    <div id="gameOverScreen">
+        <h1>GAME OVER</h1>
+        <p>You survived the AI onslaught!</p>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button id="restartButton">Restart Arena</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const UI_SCORE = document.getElementById('scoreDisplay');
+        const GAME_OVER_SCREEN = document.getElementById('gameOverScreen');
+        const FINAL_SCORE = document.getElementById('finalScore');
+        const RESTART_BUTTON = document.getElementById('restartButton');
+
+        // --- Game Constants ---
+        const CANVAS_WIDTH = canvas.width;
+        const CANVAS_HEIGHT = canvas.height;
+        const PLAYER_RADIUS = 10;
+        const PROJECTILE_SPEED = 8;
+        const PROJECTILE_SIZE = 2;
+
+        // --- Game State ---
+        let gameLoopId;
+        let score = 0;
+        let isGameOver = false;
+        let keys = {};
+        let mousePos = { x: 0, y: 0 };
+        let lastUpdateTime = 0;
+        let lastEnemySpawnTime = 0;
+        let baseEnemySpawnInterval = 2000; // ms
+        let enemies = [];
+        let projectiles = [];
+        let player = null;
+
+        // --- Utility Functions ---
+
+        /** Calculates distance between two points */
+        function dist(x1, y1, x2, y2) {
+            return Math.hypot(x2 - x1, y2 - y1);
+        }
+
+        /** Normalizes a vector */
+        function normalize(dx, dy) {
+            const length = Math.hypot(dx, dy);
+            if (length === 0) return { x: 0, y: 0 };
+            return { x: dx / length, y: dy / length };
+        }
+
+        // --- Entity Classes ---
+
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = PLAYER_RADIUS;
+                this.speed = 4;
+            }
+
+            update() {
+                if (isGameOver) return;
+
+                let dx = 0;
+                let dy = 0;
+
+                // WASD or Arrow Keys
+                if (keys['w'] || keys['ArrowUp']) dy -= 1;
+                if (keys['s'] || keys['ArrowDown']) dy += 1;
+                if (keys['a'] || keys['ArrowLeft']) dx -= 1;
+                if (keys['d'] || keys['ArrowRight']) dx += 1;
+
+                const vector = normalize(dx, dy);
+
+                this.x += vector.x * this.speed;
+                this.y += vector.y * this.speed;
+
+                // Boundary checking
+                this.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(CANVAS_HEIGHT - this.radius, this.y));
+            }
+
+            draw() {
+                ctx.fillStyle = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Enemy {
+            constructor(x, y, levelMultiplier) {
+                this.x = x;
+                this.y = y;
+                this.size = 15;
+                // Base speed scales up steadily over time
+                this.baseSpeed = 1.5;
+                this.speed = this.baseSpeed + (levelMultiplier * 0.2); // Scaling factor
+                this.color = '#ff4444';
+                this.active = true;
+            }
+
+            // FSM: Chase State
+            update() {
+                if (!this.active || !player) return;
+
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+
+                const vector = normalize(dx, dy);
+
+                this.x += vector.x * this.speed;
+                this.y += vector.y * this.speed;
+
+                // Check collision with player
+                if (dist(this.x, this.y, player.x, player.y) < this.size / 2 + player.radius) {
+                    gameOver();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, velocityX, velocityY) {
+                this.x = x;
+                this.y = y;
+                this.radius = PROJECTILE_SIZE;
+                this.vx = velocityX;
+                this.vy = velocityY;
+                this.color = '#ffffff';
+                this.active = true;
+            }
+
+            update() {
+                if (!this.active) return;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Check boundaries
+                if (this.x < 0 || this.x > CANVAS_WIDTH || this.y < 0 || this.y > CANVAS_HEIGHT) {
+                    this.active = false;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // --- Game Logic ---
+
+        function initGame() {
+            isGameOver = false;
+            score = 0;
+            UI_SCORE.textContent = 0;
+            enemies = [];
+            projectiles = [];
+            lastEnemySpawnTime = 0;
+            lastUpdateTime = performance.now();
+            
+            player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+            GAME_OVER_SCREEN.style.display = 'none';
+
+            if (gameLoopId) {
+                cancelAnimationFrame(gameLoopId);
+            }
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function spawnEnemy(levelMultiplier) {
+            // Determine spawn point far outside the canvas edge
+            let x, y;
+            const buffer = 50;
+
+            const edge = Math.floor(Math.random() * 4); // 0: Top, 1: Bottom, 2: Left, 3: Right
+
+            switch (edge) {
+                case 0: // Top
+                    x = Math.random() * CANVAS_WIDTH;
+                    y = -buffer;
+                    break;
+                case 1: // Bottom
+                    x = Math.random() * CANVAS_WIDTH;
+                    y = CANVAS_HEIGHT + buffer;
+                    break;
+                case 2: // Left
+                    x = -buffer;
+                    y = Math.random() * CANVAS_HEIGHT;
+                    break;
+                case 3: // Right
+                    x = CANVAS_WIDTH + buffer;
+                    y = Math.random() * CANVAS_HEIGHT;
+                    break;
+            }
+
+            enemies.push(new Enemy(x, y, levelMultiplier));
+        }
+
+        function checkCollisions() {
+            // 1. Projectile vs Enemy Collision
+            projectiles.forEach(p => {
+                if (!p.active) return;
+                
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    if (!e.active) continue;
+
+                    if (dist(p.x, p.y, e.x, e.y) < e.size / 2 + p.radius) {
+                        // Collision! Destroy both.
+                        p.active = false;
+                        e.active = false;
+                        score++;
+                        UI_SCORE.textContent = score;
+                        break; // Projectile is used up
+                    }
+                }
+            });
+
+            // Clean up inactive entities
+            projectiles = projectiles.filter(p => p.active);
+            enemies = enemies.filter(e => e.active);
+        }
+        
+        function handleSpawningAndScaling(currentTime) {
+            const timeElapsed = currentTime - lastUpdateTime;
+            
+            // Calculate level multiplier based on game time (seconds)
+            const gameTimeSeconds = Math.floor(currentTime / 1000);
+            const levelMultiplier = Math.floor(gameTimeSeconds / 10); // Increases every 10 seconds
+
+            // Calculate current required spawn interval (scales down over time)
+            // Minimum interval is 300ms
+            const spawnInterval = Math.max(300, baseEnemySpawnInterval - (gameTimeSeconds * 50));
+
+            if (currentTime - lastEnemySpawnTime > spawnInterval) {
+                spawnEnemy(levelMultiplier);
+                lastEnemySpawnTime = currentTime;
+            }
+        }
+
+        function updateGame(currentTime) {
+            if (isGameOver) return;
+
+            handleSpawningAndScaling(currentTime);
+
+            player.update();
+            enemies.forEach(e => e.update());
+            projectiles.forEach(p => p.update());
+
+            checkCollisions();
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            projectiles.forEach(p => p.draw());
+            enemies.forEach(e => e.draw());
+            player.draw();
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(gameLoopId);
+            
+            FINAL_SCORE.textContent = score;
+            GAME_OVER_SCREEN.style.display = 'flex';
+        }
+
+        function gameLoop(currentTime) {
+            lastUpdateTime = currentTime;
+
+            updateGame(currentTime);
+            drawGame();
+
+            if (!isGameOver) {
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Player shooting
+        canvas.addEventListener('click', (event) => {
+            if (isGameOver || !player) return;
+
+            // Get mouse position relative to canvas
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            // Calculate direction vector from player to mouse
+            const dx = mouseX - player.x;
+            const dy = mouseY - player.y;
+
+            const vector = normalize(dx, dy);
+
+            // Create projectile, launching from player center
+            const p = new Projectile(
+                player.x + vector.x * (player.radius + 1), // Start just outside player edge
+                player.y + vector.y * (player.radius + 1),
+                vector.x * PROJECTILE_SPEED,
+                vector.y * PROJECTILE_SPEED
+            );
+            projectiles.push(p);
+        });
+
+        // Key Press Handling for smooth movement
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // Restart Button
+        RESTART_BUTTON.addEventListener('click', initGame);
+
+        // Start the game initialization
+        initGame();
+    });
+</script>
+
+</body>
+</html>

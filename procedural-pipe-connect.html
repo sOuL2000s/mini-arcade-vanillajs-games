@@ -1,0 +1,667 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pipe Connect Puzzle Generator</title>
+    <style>
+        :root {
+            --grid-size: 8;
+            --cell-size: 40px;
+            --pipe-color: #2c3e50;
+            --pipe-bg: #ecf0f1;
+            --start-color: #27ae60;
+            --end-color: #c0392b;
+            --path-color: #3498db;
+            --solved-path-color: #2ecc71;
+            --pipe-thickness: 8px;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f7f6;
+            margin: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        #info-bar {
+            width: 100%;
+            max-width: calc(var(--grid-size) * var(--cell-size));
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--grid-size), var(--cell-size));
+            grid-template-rows: repeat(var(--grid-size), var(--cell-size));
+            border: 4px solid #34495e;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.5s ease;
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            box-sizing: border-box;
+            border: 1px solid #bdc3c7;
+            background-color: var(--pipe-bg);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s ease-out, background-color 0.5s;
+        }
+
+        /* Pipe Visualization using Pseudo-elements */
+        .pipe-visual {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Center Dot (Always present for pipes) */
+        .pipe-visual::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: var(--pipe-thickness);
+            height: var(--pipe-thickness);
+            background-color: var(--pipe-color);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            z-index: 2;
+        }
+
+        /* Pipe Segments - Use borders to simulate pipes */
+        .cell[data-type="1"] .pipe-visual { /* Straight */
+            border-left: var(--pipe-thickness) solid var(--pipe-color);
+            border-right: var(--pipe-thickness) solid var(--pipe-color);
+            transform: rotate(90deg); /* Base Vertical */
+        }
+        .cell[data-type="2"] .pipe-visual { /* Corner */
+            border-top: var(--pipe-thickness) solid var(--pipe-color);
+            border-right: var(--pipe-thickness) solid var(--pipe-color);
+        }
+        .cell[data-type="3"] .pipe-visual { /* T-Junction */
+            border-top: var(--pipe-thickness) solid var(--pipe-color);
+            border-right: var(--pipe-thickness) solid var(--pipe-color);
+            border-left: var(--pipe-thickness) solid var(--pipe-color);
+        }
+        .cell[data-type="4"] .pipe-visual { /* Cross */
+            border: var(--pipe-thickness) solid var(--pipe-color);
+        }
+
+        /* Pipe Rotation Handled by JS inline style */
+        .cell[data-rotation] .pipe-visual {
+            transform-origin: center center;
+        }
+
+        /* Start and End Markers */
+        .cell.start {
+            background-color: var(--start-color);
+            border-color: var(--start-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        .cell.end {
+            background-color: var(--end-color);
+            border-color: var(--end-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        /* Solved State Feedback */
+        .cell.on-path .pipe-visual::before {
+            background-color: var(--solved-path-color);
+        }
+        .cell.on-path[data-type] .pipe-visual {
+            /* Change the pipe color itself for better feedback */
+            filter: hue-rotate(120deg) brightness(1.2); 
+            /* This is a cheat way to change pseudo-element color, 
+               but works well for visualization purposes */
+        }
+
+        .message {
+            margin-top: 20px;
+            font-size: 1.5em;
+            color: #2ecc71;
+            font-weight: bold;
+            display: none;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #e8f8f5;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Pipe Connect Puzzle</h1>
+
+    <div id="info-bar">
+        <div>Score: <span id="score-display">0</span></div>
+        <div>Pipes Rotated: <span id="moves-display">0</span></div>
+        <div>Difficulty: <span id="difficulty-display">8x8</span></div>
+    </div>
+
+    <div id="game-grid">
+        <!-- Grid cells will be injected here by JavaScript -->
+    </div>
+
+    <div id="message" class="message">
+        Puzzle Solved! Generating next level...
+    </div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        let GRID_SIZE = 8;
+        let score = 0;
+        let moves = 0;
+        let grid = [];
+        let startCell = { r: 0, c: 0 };
+        let endCell = { r: 0, c: 0 };
+        const GRID_CONTAINER = document.getElementById('game-grid');
+        
+        // Pipe Connections: [N, E, S, W] (True means open)
+        // Rotation is 90 degrees clockwise.
+        const PIPE_MAP = {
+            // 0: Empty/Blocker (Should not be used in main path, useful for padding/walls)
+            0: { id: 0, connections: [false, false, false, false], css: 'pipe-block' },
+            // 1: Straight (Vertical default)
+            1: { id: 1, connections: [true, false, true, false], css: 'pipe-straight' },
+            // 2: Corner (NE default)
+            2: { id: 2, connections: [true, true, false, false], css: 'pipe-corner' },
+            // 3: T-Junction (NES default)
+            3: { id: 3, connections: [true, true, true, false], css: 'pipe-t-junction' },
+            // 4: Cross
+            4: { id: 4, connections: [true, true, true, true], css: 'pipe-cross' }
+        };
+
+        const DIRS = [
+            { r: -1, c: 0, index: 0, opposite: 2 }, // North (index 0, connected by South 2)
+            { r: 0, c: 1, index: 1, opposite: 3 },  // East (index 1, connected by West 3)
+            { r: 1, c: 0, index: 2, opposite: 0 },  // South
+            { r: 0, c: -1, index: 3, opposite: 1 }   // West
+        ];
+
+        // --- UTILITY FUNCTIONS ---
+
+        /**
+         * Rotates the connection array clockwise by R steps (0, 1, 2, 3).
+         * R=1: [N, E, S, W] -> [W, N, E, S]
+         */
+        function rotateConnections(connections, rotation) {
+            if (rotation === 0) return connections;
+            
+            const rotated = [...connections];
+            const steps = rotation % 4;
+
+            for (let i = 0; i < steps; i++) {
+                // Rotate array elements: move last to front
+                const last = rotated.pop();
+                rotated.unshift(last);
+            }
+            return rotated;
+        }
+
+        /**
+         * Get the current effective connections for a cell based on its type and rotation.
+         */
+        function getCurrentConnections(cell) {
+            const baseConnections = PIPE_MAP[cell.type].connections;
+            return rotateConnections(baseConnections, cell.rotation);
+        }
+
+        function getRandomInt(max) {
+            return Math.floor(Math.random() * max);
+        }
+
+        function isInsideGrid(r, c) {
+            return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
+        }
+
+        // --- GENERATION LOGIC ---
+
+        function generatePuzzle() {
+            grid = [];
+            moves = 0;
+            
+            // 1. Initialize Grid
+            for (let r = 0; r < GRID_SIZE; r++) {
+                grid[r] = [];
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    grid[r][c] = {
+                        r, c,
+                        type: 0,
+                        rotation: 0,
+                        isPath: false, // For generation tracking
+                        initialPathRotation: 0 // Store rotation needed for solved path
+                    };
+                }
+            }
+
+            // 2. Define Start and End Points
+            // Start at a random edge
+            let currentR, currentC;
+            const edgeChoices = [
+                { r: 0, c: getRandomInt(GRID_SIZE), dir: 2 }, // Top edge, must start moving South
+                { r: GRID_SIZE - 1, c: getRandomInt(GRID_SIZE), dir: 0 }, // Bottom edge, must start moving North
+                { r: getRandomInt(GRID_SIZE), c: 0, dir: 1 }, // Left edge, must start moving East
+                { r: getRandomInt(GRID_SIZE), c: GRID_SIZE - 1, dir: 3 } // Right edge, must start moving West
+            ];
+            
+            const startEdge = edgeChoices[getRandomInt(4)];
+            currentR = startEdge.r;
+            currentC = startEdge.c;
+            
+            startCell = { r: currentR, c: currentC };
+            
+            let pathLength = 0;
+            let currentCell = grid[currentR][currentC];
+            currentCell.isPath = true;
+
+            const pathHistory = [{ r: currentR, c: currentC }];
+            const minPathLength = Math.floor(GRID_SIZE * 1.5);
+            
+            // 3. Generate the winding path using Randomized DFS
+            while (pathLength < GRID_SIZE * GRID_SIZE) {
+                const neighbors = DIRS.map((dir, index) => ({ dir, index }))
+                    .filter(({ dir }) => isInsideGrid(currentR + dir.r, currentC + dir.c))
+                    .filter(({ dir }) => !grid[currentR + dir.r][currentC + dir.c].isPath);
+                
+                if (neighbors.length === 0) {
+                    // Path dead-ends or fully explored. If path is long enough, this is the end.
+                    break; 
+                }
+
+                // Randomly pick a direction
+                const { dir: chosenDir, index: entryDirIndex } = neighbors[getRandomInt(neighbors.length)];
+
+                const nextR = currentR + chosenDir.r;
+                const nextC = currentC + chosenDir.c;
+                const nextCell = grid[nextR][nextC];
+
+                // Determine required pipe type for current cell
+                const prevCell = pathHistory[pathHistory.length - 1] || currentCell;
+                
+                // 4. Connect current cell to next cell
+                const exitDirIndex = entryDirIndex;
+                const requiredEntryIndex = chosenDir.opposite; // The direction the next pipe connects to current
+                
+                // Look up required connections based on neighbors (previous and next)
+                
+                // For the current cell, we need an exit connection at `exitDirIndex`
+                // AND an entry connection from the previous cell.
+                let prevDirIndex = -1;
+                if (pathHistory.length > 1) {
+                    const prevR = prevCell.r;
+                    const prevC = prevCell.c;
+                    
+                    // Find which direction index connects prev to current
+                    for(let i=0; i<4; i++) {
+                        if (prevR + DIRS[i].r === currentR && prevC + DIRS[i].c === currentC) {
+                            prevDirIndex = i;
+                            break;
+                        }
+                    }
+                }
+                
+                // Define the pipe segments required (based on current/next neighbor connections)
+                // This is a simplified approach, focusing only on the path we are building.
+                
+                let neededConnections = [];
+                if (pathHistory.length > 1) {
+                    neededConnections.push(prevDirIndex);
+                }
+                neededConnections.push(exitDirIndex);
+                
+                // Find the smallest pipe type that satisfies these connections
+                // (This is overly complex for single path generation, let's simplify pipe assignment)
+                
+                let pipeType;
+                let finalRotation = 0;
+                
+                if (pathHistory.length === 1) {
+                    // Start piece: Must be a Straight pipe leading out
+                    pipeType = 1; 
+                    finalRotation = (exitDirIndex % 2 === 0) ? 1 : 0; // 0 for H, 1 for V, but initial type is V (1)
+                    if (exitDirIndex === 1) finalRotation = 0; // Going East
+                    if (exitDirIndex === 3) finalRotation = 2; // Going West
+                    if (exitDirIndex === 0) finalRotation = 3; // Going North
+                    if (exitDirIndex === 2) finalRotation = 1; // Going South
+                    
+                } else {
+                    // Middle piece: Determine type based on turn
+                    const entryDir = DIRS.find(d => d.opposite === prevDirIndex);
+                    const exitDir = DIRS[exitDirIndex];
+
+                    const dirChange = (exitDirIndex - prevDirIndex + 4) % 4;
+                    
+                    if (dirChange === 0 || dirChange === 2) { 
+                        // Straight path (0 or 180 degree turn from entry)
+                        pipeType = 1;
+                        finalRotation = (prevDirIndex % 2 === 0) ? 1 : 0; // Vertical if connected N/S
+                    } else { 
+                        // Corner (90 or 270 degree turn)
+                        pipeType = 2;
+                        // Find required rotation to connect entry and exit
+                        // Example: Entry S (2), Exit E (1). Base corner is N(0), E(1). Need to rotate 3 times.
+                        // Base Corner (0,1,F,F) needs to align to (F,1,2,F) (meaning Entry must be 2, Exit must be 1)
+                        
+                        // We store the type and the solved rotation needed.
+                        let attempts = 0;
+                        while(attempts < 4) {
+                            const connections = rotateConnections(PIPE_MAP[2].connections, attempts);
+                            // Check if connections match the required entry/exit (using opposite index for entry)
+                            if (connections[prevDirIndex] && connections[exitDirIndex]) {
+                                finalRotation = attempts;
+                                break;
+                            }
+                            attempts++;
+                        }
+                        
+                        if (attempts === 4) {
+                             // This should not happen if logic is sound, but sometimes path forcing requires T-junctions
+                             pipeType = 3;
+                             attempts = 0;
+                             while(attempts < 4) {
+                                const connections = rotateConnections(PIPE_MAP[3].connections, attempts);
+                                if (connections[prevDirIndex] && connections[exitDirIndex]) {
+                                    finalRotation = attempts;
+                                    break;
+                                }
+                                attempts++;
+                            }
+                        }
+                    }
+                }
+                
+                currentCell.type = pipeType;
+                currentCell.initialPathRotation = finalRotation; // Store the SOLVED rotation
+                
+                currentCell = nextCell;
+                currentCell.isPath = true;
+                currentR = nextR;
+                currentC = nextC;
+                pathHistory.push({ r: currentR, c: currentC });
+                pathLength++;
+                
+                // If path is long enough, randomly decide if this is the end
+                if (pathLength >= minPathLength && Math.random() < 0.3) {
+                    break;
+                }
+            }
+            
+            // Set the final cell as the End point
+            endCell = { r: currentR, c: currentC };
+            
+            // Set types and rotations for Start and End points (must be straight pipe leading out/in)
+            if (pathHistory.length > 1) {
+                const firstPathPiece = grid[pathHistory[1].r][pathHistory[1].c];
+                const lastPathPiece = grid[pathHistory[pathHistory.length - 2].r][pathHistory[pathHistory.length - 2].c];
+                
+                // Start piece must be fixed
+                grid[startCell.r][startCell.c].type = 1;
+                grid[startCell.r][startCell.c].initialPathRotation = grid[startCell.r][startCell.c].initialPathRotation; // Already set above
+
+                // End piece (needs connection to prev piece)
+                grid[endCell.r][endCell.c].type = lastPathPiece.type === 4 ? 1 : 1; // Simplification: just make end a straight pipe connected back
+            }
+
+            // 5. Fill remaining cells (distractors)
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = grid[r][c];
+                    if (!cell.isPath) {
+                        // Assign random pipe type (1: Straight, 2: Corner, 3: T-Junction)
+                        cell.type = getRandomInt(3) + 1;
+                        cell.initialPathRotation = getRandomInt(4); // Solved rotation doesn't matter here
+                    }
+                    
+                    // 6. Scramble the puzzle: apply random rotation
+                    cell.rotation = getRandomInt(4);
+                }
+            }
+            
+            // Ensure Start and End pipes are marked correctly for rendering
+            grid[startCell.r][startCell.c].type = 0; // Use type 0 to denote special Start/End cell
+            grid[endCell.r][endCell.c].type = 0; // Use type 0
+
+            renderGrid();
+        }
+
+        // --- VALIDATION LOGIC (Path Tracing) ---
+
+        /**
+         * Checks if the puzzle is solved by performing a connectivity trace.
+         */
+        function checkWin() {
+            const visited = new Set();
+            const pathCells = [];
+            
+            const startR = startCell.r;
+            const startC = startCell.c;
+            
+            let currentR = startR;
+            let currentC = startC;
+            
+            // The Start cell must lead out! Find the required exit direction based on the first path piece.
+            let requiredExitDirIndex = -1;
+            
+            // Find the true first path piece neighbor
+            for(let i=0; i<DIRS.length; i++) {
+                const neighborR = startR + DIRS[i].r;
+                const neighborC = startC + DIRS[i].c;
+                if (isInsideGrid(neighborR, neighborC) && grid[neighborR][neighborC].isPath) {
+                    requiredExitDirIndex = i;
+                    break;
+                }
+            }
+            
+            if (requiredExitDirIndex === -1) return false; // Should not happen in a valid generated puzzle
+
+            // Start the trace from the required exit direction
+            let entryDirection = requiredExitDirIndex; // Direction *from* the neighbor *to* the start cell (0:N, 1:E, 2:S, 3:W)
+            let pathFound = false;
+
+            // Start BFS/DFS trace from the cell adjacent to Start
+            let traceR = startR + DIRS[requiredExitDirIndex].r;
+            let traceC = startC + DIRS[requiredExitDirIndex].c;
+            
+            // We need to trace from the first piece *to* the end.
+            const traceQueue = [{ r: traceR, c: traceC, entryDir: DIRS[requiredExitDirIndex].opposite }];
+            visited.add(`${traceR},${traceC}`);
+            pathCells.push(grid[traceR][traceC]);
+            
+            let successfulTrace = false;
+
+            while (traceQueue.length > 0) {
+                const { r, c, entryDir } = traceQueue.shift();
+                const cell = grid[r][c];
+
+                if (r === endCell.r && c === endCell.c) {
+                    // Check if the entry direction is successfully handled by the End pipe
+                    const connections = getCurrentConnections(cell);
+                    if (connections[entryDir]) {
+                        successfulTrace = true;
+                    }
+                    break; 
+                }
+                
+                const connections = getCurrentConnections(cell);
+
+                // 1. Check if the current pipe accepts entry from the required direction
+                if (!connections[entryDir]) {
+                    // Mismatch: Pipe rotated incorrectly
+                    break;
+                }
+
+                // 2. Find the exit direction (must be a connection that isn't the entry direction)
+                let exitDirIndex = -1;
+                for (let i = 0; i < 4; i++) {
+                    if (i !== entryDir && connections[i]) {
+                        exitDirIndex = i;
+                        break;
+                    }
+                }
+
+                if (exitDirIndex === -1) {
+                    // Dead end, path broken
+                    break;
+                }
+
+                const nextR = r + DIRS[exitDirIndex].r;
+                const nextC = c + DIRS[exitDirIndex].c;
+                
+                if (isInsideGrid(nextR, nextC)) {
+                    const nextCell = grid[nextR][nextC];
+                    const requiredEntryIndex = DIRS[exitDirIndex].opposite;
+
+                    // 3. Check if the next pipe accepts entry from the required direction
+                    const nextConnections = getCurrentConnections(nextCell);
+                    
+                    if (nextConnections[requiredEntryIndex]) {
+                        // Successful link
+                        if (!visited.has(`${nextR},${nextC}`)) {
+                            visited.add(`${nextR},${nextC}`);
+                            pathCells.push(nextCell);
+                            traceQueue.push({ r: nextR, c: nextC, entryDir: requiredEntryIndex });
+                        }
+                    } else {
+                        // Next pipe is rotated wrong
+                        break;
+                    }
+                } else {
+                    // Path goes off grid (error or open end)
+                    break;
+                }
+            }
+            
+            // 4. Update visualization
+            document.querySelectorAll('.cell').forEach(el => el.classList.remove('on-path'));
+
+            if (successfulTrace) {
+                score++;
+                document.getElementById('score-display').textContent = score;
+                document.getElementById('message').style.display = 'block';
+                
+                // Highlight solved path
+                pathCells.forEach(cell => {
+                    const el = document.getElementById(`cell-${cell.r}-${cell.c}`);
+                    if (el) el.classList.add('on-path');
+                });
+                
+                // Immediately generate the next level after a brief delay
+                setTimeout(() => {
+                    document.getElementById('message').style.display = 'none';
+                    increaseDifficulty();
+                    generatePuzzle();
+                }, 1000); 
+            }
+            
+            return successfulTrace;
+        }
+
+        // --- RENDER & INPUT ---
+
+        function handleCellClick(r, c) {
+            const cell = grid[r][c];
+            if (cell.r === startCell.r && cell.c === startCell.c) return;
+            if (cell.r === endCell.r && cell.c === endCell.c) return;
+            
+            cell.rotation = (cell.rotation + 1) % 4;
+            moves++;
+            document.getElementById('moves-display').textContent = moves;
+            
+            const element = document.getElementById(`cell-${r}-${c}`);
+            if (element) {
+                // Update rotation style instantly
+                const pipeVisual = element.querySelector('.pipe-visual');
+                pipeVisual.style.transform = `rotate(${cell.rotation * 90}deg)`;
+            }
+
+            checkWin();
+        }
+
+        function renderGrid() {
+            GRID_CONTAINER.innerHTML = '';
+            document.documentElement.style.setProperty('--grid-size', GRID_SIZE);
+            document.getElementById('difficulty-display').textContent = `${GRID_SIZE}x${GRID_SIZE}`;
+            
+            // Reset moves display for new level
+            document.getElementById('moves-display').textContent = 0;
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cellData = grid[r][c];
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'cell';
+                    cellDiv.id = `cell-${r}-${c}`;
+                    cellDiv.setAttribute('data-r', r);
+                    cellDiv.setAttribute('data-c', c);
+                    cellDiv.setAttribute('data-type', cellData.type);
+                    
+                    cellDiv.onclick = () => handleCellClick(r, c);
+
+                    const visualDiv = document.createElement('div');
+                    visualDiv.className = 'pipe-visual';
+                    visualDiv.style.transform = `rotate(${cellData.rotation * 90}deg)`;
+                    
+                    cellDiv.appendChild(visualDiv);
+
+                    if (r === startCell.r && c === startCell.c) {
+                        cellDiv.classList.add('start');
+                        cellDiv.textContent = 'S';
+                    } else if (r === endCell.r && c === endCell.c) {
+                        cellDiv.classList.add('end');
+                        cellDiv.textContent = 'E';
+                    }
+                    
+                    GRID_CONTAINER.appendChild(cellDiv);
+                }
+            }
+        }
+        
+        // --- DIFFICULTY PROGRESSION ---
+
+        function increaseDifficulty() {
+            if (score % 3 === 0 && score > 0) {
+                // Every 3 puzzles, increase size
+                GRID_SIZE = Math.min(GRID_SIZE + 1, 12); // Cap at 12x12
+            }
+            // Future extension: Introduce new pipe types or blockages based on score.
+        }
+
+        // --- INITIALIZATION ---
+
+        function initGame() {
+            // Set initial state
+            document.getElementById('score-display').textContent = score;
+            document.getElementById('moves-display').textContent = moves;
+            
+            generatePuzzle();
+        }
+
+        // Run the game!
+        initGame();
+    </script>
+</body>
+</html>

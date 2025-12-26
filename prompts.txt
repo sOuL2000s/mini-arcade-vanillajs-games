@@ -1,0 +1,164 @@
+AI: This is an excellent way to organize a coding project using AI assistants!
+
+To ensure the AI produces exactly what you want—a single, playable HTML file containing all necessary HTML, CSS, and JavaScript—the prompts must be extremely clear and enforce the technical constraints immediately.
+
+Here are the 10 prompts, one for each game, ready for you to use with a code-generating AI:
+
+---
+
+## The Master Prompt Template Constraints
+
+*(These constraints are integrated into every prompt below to guarantee a single-file output.)*
+
+1.  **Single File Requirement:** All HTML structure, CSS styling (using the `<style>` tag), and JavaScript logic (using the `<script>` tag) must be contained within one single `index.html` file.
+2.  **Functionality:** The resulting file must be fully functional and playable upon opening it in a modern web browser.
+3.  **Technology:** Use only HTML5, CSS3, and Vanilla JavaScript. No external libraries or frameworks.
+
+---
+
+## 1. Endless Runner (Advanced Dino-style)
+
+```
+Generate the complete HTML code for a functional, single-file "Endless Runner" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  The game displays a player character (a small square) running automatically across a flat ground plane.
+2.  Player input: Pressing the SPACE BAR or clicking the screen triggers a jump.
+3.  Obstacles (varying width/height rectangles) must spawn randomly from the right edge and move left towards the player.
+4.  **Infinite Scaling:** The horizontal speed of the game must increase every 10 seconds, making the game progressively harder.
+5.  Collision detection must be implemented: If the player hits an obstacle, the game stops, and the final score (time survived in seconds) is displayed.
+6.  The canvas/game area should be clearly defined and centered on the screen.
+```
+
+## 2. Infinite Space Survival
+
+```
+Generate the complete HTML code for a functional, single-file "Infinite Space Survival" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  The player controls a small spaceship (represented by a triangle or a small image).
+2.  Movement: Use the WASD or Arrow keys to move the spaceship freely around the screen.
+3.  Enemies: Asteroids (large circles) must spawn randomly from all edges of the screen, moving toward the center or past the player.
+4.  Scoring: The player's score increases based on time survived.
+5.  Survival: The player has 3 Health points (HP). If an asteroid collides with the spaceship, HP decreases.
+6.  Game Over: When HP reaches zero, the game stops, and the survival time is displayed.
+7.  The background should be black, simulating space. The game loop must maintain smooth, continuous movement.
+```
+
+## 3. Reaction Time Challenge (Addictive!)
+
+```
+Generate the complete HTML code for a functional, single-file "Reaction Time Challenge" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  The game starts with a 'ready' state.
+2.  A large, colored target square appears randomly on the screen.
+3.  The player must click the target square as quickly as possible.
+4.  Timing: After the target appears, the AI must measure the player's reaction time (in milliseconds).
+5.  The required reaction time must continuously decrease as the player's score increases (e.g., starting at 800ms, decreasing by 5ms per successful click).
+6.  Scoring: Score is the number of successful, fast clicks.
+7.  Failure Conditions: If the click is too slow (exceeds the current time limit) or if the player clicks the background (not the target), the game ends and displays the score.
+8.  Include a clear visual display of the current score and the player's last reaction time.
+```
+
+## 4. Snake Game – Infinite Evolution
+
+```
+Generate the complete HTML code for a functional, single-file "Snake Game" using grid logic. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  Implement the classic Snake game played on a visible grid.
+2.  Movement: The snake is controlled by the Arrow keys (or WASD).
+3.  Food: A single piece of food (dot) spawns randomly on the grid.
+4.  Growth: When the snake eats the food, its body segment count increases by one, and a new piece of food spawns.
+5.  **Infinite Concept:** While using a canvas, ensure the game area is large and the speed slightly increases every 20 points achieved, simulating infinite evolution.
+6.  Game Over: If the snake collides with itself or the grid boundaries, the game ends, and the score (length of the snake) is displayed.
+7.  The display must be sharp and grid-based.
+```
+
+## 5. Precision Aim Trainer
+
+```
+Generate the complete HTML code for a functional, single-file "Precision Aim Trainer" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  Targets (circles) appear randomly on the screen for a very short duration (e.g., 1.5 seconds) before disappearing.
+2.  Player Input: The player must click the center of the target using the mouse before it disappears.
+3.  Scoring: Score increases only upon a successful hit (a click within the target's boundary).
+4.  **Infinite Scaling:** As the score increases, the target size must decrease, and the time the target is visible must decrease, continuously increasing the difficulty.
+5.  Visual Feedback: Provide immediate visual feedback (e.g., the target flashes green for a hit, or red for a miss/time out).
+6.  Game Over: The player loses 3 lives if they miss or fail to click in time. When lives hit zero, the game ends and displays the score.
+```
+
+## 6. Infinite City Builder (Minimalist)
+
+```
+Generate the complete HTML code for a functional, single-file "Minimalist Infinite City Builder" game focusing on placement. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  Display a vast, scrollable grid representing the infinite map.
+2.  Player Action: Clicking any empty tile on the grid places a "Building" (represented by a colored square).
+3.  Building Type: Implement three simple building types: Residential (blue), Commercial (yellow), and Industrial (red). The player switches between these types using keys 1, 2, and 3.
+4.  **Infinite Nature:** The game canvas should scroll and expand dynamically as the player clicks near the edges, ensuring the map is theoretically limitless.
+5.  Scoring: The score is simply the total number of buildings placed.
+6.  Display the current selected building type clearly in the corner. Do not worry about complex resource management, only focus on placement and infinite scrollability.
+```
+
+## 7. Bullet Hell Survival
+
+```
+Generate the complete HTML code for a functional, single-file "Bullet Hell Survival" game. The game must use inline CSS and JavaScript, emphasizing high performance for many objects.
+
+**Core Mechanics:**
+1.  Player Control: A small player character (dot) moves freely using WASD or Arrow keys.
+2.  Enemies/Bullets: Thousands of small, fast-moving bullets (circles) spawn continuously from the center or edges of the screen in complex, increasing patterns (e.g., spirals, wave patterns).
+3.  Collision: If any bullet hits the player, the game is over.
+4.  **Infinite Scaling:** The density and speed of the bullet patterns must increase over time, guaranteeing endless difficulty.
+5.  Scoring: Score is the total time survived in milliseconds.
+6.  Rendering Optimization: Ensure the collision detection and rendering logic is optimized to handle hundreds of active bullet objects simultaneously without lag.
+```
+
+## 8. Procedural Puzzle Generator (Pipe Connect)
+
+```
+Generate the complete HTML code for a functional, single-file "Procedural Pipe Connect Puzzle Generator" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  Display a grid (e.g., 8x8) filled with various pipe segments (straight, corner, T-junction).
+2.  Generation: The script must procedurally generate a valid, solvable puzzle with a single designated Start point and End point.
+3.  Player Action: Clicking a pipe segment rotates it by 90 degrees clockwise.
+4.  Goal: The player must rotate the pipes to create a continuous, connected path from Start to End.
+5.  Validation: Implement a logic function that checks if the puzzle is currently solved.
+6.  **Infinite Nature:** Upon solving a puzzle, immediately generate a new, slightly larger or more constrained puzzle (e.g., 9x9, or introducing different pipe colors) to ensure endless replayability.
+7.  Scoring: Score is the number of puzzles successfully solved.
+```
+
+## 9. Infinite Parkour Platformer
+
+```
+Generate the complete HTML code for a functional, single-file "Infinite Parkour Platformer" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  The game is a side-scroller where the player controls a square character with simple physics (gravity, running, jumping).
+2.  Controls: Use Arrow keys or WASD for horizontal movement, and the SPACE bar for jumping.
+3.  Level Generation: Platforms must procedurally generate ahead of the player as they move right, creating varying gaps and heights for parkour jumps.
+4.  **Infinite Nature:** The level generation must be continuous and random, ensuring the player never reaches an end.
+5.  Game Over: If the player falls below the bottom of the screen, the game ends.
+6.  Scoring: Score is based on the horizontal distance covered.
+7.  The camera should follow the player smoothly.
+```
+
+## 10. AI Survival Arena
+
+```
+Generate the complete HTML code for a functional, single-file "AI Survival Arena" game. The game must use inline CSS and JavaScript.
+
+**Core Mechanics:**
+1.  Player Control: The player (a small circle) moves freely around the screen using WASD or Arrow keys.
+2.  Enemies: Simple enemy squares spawn randomly and continuously.
+3.  Enemy AI: Enemies must implement a basic Finite State Machine (FSM), primarily the 'Chase' state—they must continuously calculate the player's position and move toward them.
+4.  Combat: The player can shoot projectiles (small lines/dots) using the MOUSE CLICK. Projectiles destroy enemies on contact.
+5.  **Infinite Scaling:** The spawn rate and movement speed of the enemies must increase steadily over time.
+6.  Scoring: Score is based on the number of enemies destroyed.
+7.  Game Over: If an enemy touches the player, the game ends and displays the score.
+```

@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bullet Hell Survival</title>
+    <!-- All required CSS, structure, and JS are contained in this single file -->
+</head>
+<body>
+
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #111;
+        font-family: monospace;
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+    #game-container {
+        position: relative;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    canvas {
+        display: block;
+        background-color: #000;
+        border: 2px solid #333;
+    }
+    #ui-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box;
+        text-shadow: 0 0 5px black;
+        z-index: 10;
+    }
+    #game-over-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        font-size: 24px;
+        z-index: 20;
+    }
+    #game-over-screen h1 {
+        color: #ff4444;
+        font-size: 3em;
+        margin-bottom: 0.5em;
+    }
+    #restart-button {
+        padding: 10px 20px;
+        margin-top: 20px;
+        font-size: 1.2em;
+        cursor: pointer;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        transition: background-color 0.3s;
+    }
+    #restart-button:hover {
+        background-color: #45a049;
+    }
+</style>
+
+<div id="game-container">
+    <div id="ui-overlay">
+        Score: <span id="score-display">0</span> ms | Bullets: <span id="bullet-count">0</span>
+        <div style="float: right;">Movement: WASD / Arrows</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="game-over-screen">
+        <h1>GAME OVER</h1>
+        <p>Survival Time: <span id="final-score">0</span> ms</p>
+        <p>Highest Difficulty Achieved: <span id="final-difficulty">1.0</span></p>
+        <button id="restart-button">Play Again</button>
+    </div>
+</div>
+
+<script>
+    // --- Configuration ---
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+
+    // --- Game State Variables ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    let gameRunning = false;
+    let startTime;
+    let score = 0;
+    let frameCounter = 0;
+    let difficultyMultiplier = 1.0;
+
+    const player = {
+        x: CANVAS_WIDTH / 2,
+        y: CANVAS_HEIGHT / 2,
+        radius: 8,
+        speed: 4,
+        color: '#88C0D0'
+    };
+
+    let bullets = [];
+    const bulletBaseRadius = 3;
+    const bulletBaseSpeed = 3.5;
+    const keys = {};
+
+    // --- UI Elements ---
+    const scoreDisplay = document.getElementById('score-display');
+    const bulletCountDisplay = document.getElementById('bullet-count');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreDisplay = document.getElementById('final-score');
+    const finalDifficultyDisplay = document.getElementById('final-difficulty');
+    const restartButton = document.getElementById('restart-button');
+
+    // --- Input Handling ---
+    document.addEventListener('keydown', (e) => {
+        if (gameRunning) {
+            keys[e.key] = true;
+            // Prevent scrolling
+            if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (gameRunning) {
+            keys[e.key] = false;
+        }
+    });
+
+    restartButton.addEventListener('click', () => {
+        startGame();
+    });
+
+    // --- Core Game Functions ---
+
+    function startGame() {
+        // Reset state
+        player.x = CANVAS_WIDTH / 2;
+        player.y = CANVAS_HEIGHT / 2;
+        bullets = [];
+        score = 0;
+        frameCounter = 0;
+        difficultyMultiplier = 1.0;
+        startTime = performance.now();
+
+        gameOverScreen.style.display = 'none';
+        gameRunning = true;
+
+        // Start the main loop
+        requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+        gameRunning = false;
+        const totalSurvivalTime = Math.floor(performance.now() - startTime);
+        
+        finalScoreDisplay.textContent = totalSurvivalTime;
+        finalDifficultyDisplay.textContent = difficultyMultiplier.toFixed(2);
+        
+        gameOverScreen.style.display = 'flex';
+        // Clear any lingering key presses so movement doesn't trigger on restart
+        for (let key in keys) {
+            keys[key] = false;
+        }
+    }
+
+    // --- Update Logic ---
+
+    function updatePlayer() {
+        let dx = 0;
+        let dy = 0;
+
+        // Check WASD or Arrow Keys
+        if (keys['w'] || keys['W'] || keys['ArrowUp']) dy -= player.speed;
+        if (keys['s'] || keys['S'] || keys['ArrowDown']) dy += player.speed;
+        if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= player.speed;
+        if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += player.speed;
+
+        // Diagonal movement normalization (prevents faster diagonal movement)
+        if (dx !== 0 && dy !== 0) {
+            const magnitude = Math.sqrt(dx * dx + dy * dy);
+            dx = (dx / magnitude) * player.speed;
+            dy = (dy / magnitude) * player.speed;
+        }
+
+        player.x += dx;
+        player.y += dy;
+
+        // Keep player within bounds
+        player.x = Math.max(player.radius, Math.min(CANVAS_WIDTH - player.radius, player.x));
+        player.y = Math.max(player.radius, Math.min(CANVAS_HEIGHT - player.radius, player.y));
+    }
+
+    function updateBullets() {
+        // Optimize: Use standard loop for high performance
+        let i = bullets.length;
+        while (i--) {
+            const bullet = bullets[i];
+            
+            bullet.x += bullet.dx;
+            bullet.y += bullet.dy;
+
+            // Collision Check (Distance squared for speed optimization, though Math.hypot is often faster in modern JS)
+            const dist = Math.hypot(player.x - bullet.x, player.y - bullet.y);
+            
+            if (dist < player.radius + bullet.radius) {
+                endGame();
+                return; // Stop processing instantly on collision
+            }
+
+            // Remove bullets far outside the screen bounds
+            const buffer = 50;
+            if (bullet.x < -buffer || bullet.x > CANVAS_WIDTH + buffer ||
+                bullet.y < -buffer || bullet.y > CANVAS_HEIGHT + buffer) 
+            {
+                bullets.splice(i, 1);
+            }
+        }
+    }
+
+    function updateDifficulty() {
+        // Difficulty scales by 0.1 every 5 seconds (300 frames at 60 FPS)
+        const elapsedSeconds = (performance.now() - startTime) / 1000;
+        difficultyMultiplier = 1.0 + (elapsedSeconds / 5) * 0.15;
+    }
+
+    // --- Bullet Spawning Functions ---
+
+    function spawnBullet(startX, startY, angleRadians) {
+        // Base speed scaled by difficulty
+        const speed = bulletBaseSpeed * difficultyMultiplier;
+        
+        bullets.push({
+            x: startX,
+            y: startY,
+            radius: bulletBaseRadius,
+            dx: Math.cos(angleRadians) * speed,
+            dy: Math.sin(angleRadians) * speed,
+            color: '#FF4444' // Red bullets
+        });
+    }
+
+    function spawnPatterns() {
+        const center = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+        
+        // Dynamic spawn rate (more bullets as difficulty increases)
+        const spawnRate = Math.max(1, Math.floor(6 / difficultyMultiplier));
+
+        if (frameCounter % spawnRate !== 0) return;
+
+        // Pattern 1: Expanding Spiral (0 to 180 frames)
+        if ((frameCounter % 360) < 180) {
+            const spiralAngle = (frameCounter * 0.1) % (2 * Math.PI);
+            
+            for (let i = 0; i < 3; i++) {
+                // Launch three bullets slightly spread out
+                spawnBullet(center.x, center.y, spiralAngle + i * 0.1);
+            }
+        }
+        // Pattern 2: Edge Waves / Target Streams (180 to 360 frames)
+        else {
+            const streamSpeedMod = 0.5 + difficultyMultiplier * 0.5;
+
+            // Spawn from alternating corners
+            let spawnX, spawnY;
+            if (frameCounter % 4 === 0) {
+                spawnX = 0; spawnY = 0;
+            } else if (frameCounter % 4 === 1) {
+                spawnX = CANVAS_WIDTH; spawnY = 0;
+            } else if (frameCounter % 4 === 2) {
+                spawnX = 0; spawnY = CANVAS_HEIGHT;
+            } else {
+                spawnX = CANVAS_WIDTH; spawnY = CANVAS_HEIGHT;
+            }
+
+            // Calculate angle directly towards the player's current position
+            const angleToPlayer = Math.atan2(player.y - spawnY, player.x - spawnX);
+
+            // Launch a stream aiming slightly ahead or behind based on time
+            const wobble = Math.sin(frameCounter * 0.05) * 0.3;
+            spawnBullet(spawnX, spawnY, angleToPlayer + wobble);
+        }
+        
+    }
+
+    // --- Drawing Functions ---
+
+    function draw() {
+        // Clear canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Draw Player
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+        ctx.fillStyle = player.color;
+        ctx.fill();
+        
+        // Draw Bullets (Optimized for drawing many circles)
+        // Group all drawing operations for performance
+        ctx.fillStyle = '#FF4444'; 
+        for (const bullet of bullets) {
+            ctx.beginPath();
+            ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    function updateUI() {
+        score = Math.floor(performance.now() - startTime);
+        scoreDisplay.textContent = score;
+        bulletCountDisplay.textContent = bullets.length;
+    }
+
+    // --- Main Loop ---
+
+    function gameLoop(timestamp) {
+        if (!gameRunning) return;
+
+        frameCounter++;
+        
+        updatePlayer();
+        updateDifficulty();
+        spawnPatterns();
+        updateBullets(); // This handles collision detection
+        
+        draw();
+        updateUI();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Initialize the game structure
+    startGame();
+
+</script>
+
+</body>
+</html>

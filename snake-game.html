@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Snake Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #222;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+        }
+
+        #game-container {
+            border: 5px solid #00f;
+            box-shadow: 0 0 20px rgba(0, 0, 255, 0.7);
+            background-color: #000;
+        }
+
+        #info-panel {
+            width: 400px; /* Match canvas width */
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px 0;
+            font-size: 1.2em;
+        }
+        
+        #game-over-screen {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 400px;
+            height: 400px;
+            background-color: rgba(0, 0, 0, 0.9);
+            border: 5px solid red;
+            z-index: 10;
+        }
+
+        #game-over-screen h1 {
+            color: red;
+            margin-bottom: 10px;
+        }
+        #game-over-screen p {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background-color: #00f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #00a;
+        }
+
+        #controls {
+            margin-top: 15px;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>The Infinite Snake</h1>
+    
+    <div id="info-panel">
+        <div>Score: <span id="score">0</span></div>
+        <div>Level (Speed): <span id="speed">1</span></div>
+    </div>
+
+    <div id="game-container">
+        <div id="game-over-screen">
+            <h1>GAME OVER!</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button onclick="startGame()">Restart Game</button>
+        </div>
+        <canvas id="game-board" width="400" height="400"></canvas>
+    </div>
+
+    <div id="controls">
+        Use Arrow Keys or WASD to move.
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const CANVAS_SIZE = 400;
+        const GRID_SIZE = 20; // 20x20 grid
+        const CELL_SIZE = CANVAS_SIZE / GRID_SIZE; // 20px per cell
+        const INITIAL_SPEED_MS = 150; // Slower start
+        const SPEED_INCREASE_INTERVAL = 20; // Increase speed every 20 points
+        const SPEED_DECREMENT = 10; // Decrease interval by 10ms per level
+
+        // --- Game State Variables ---
+        let canvas, ctx;
+        let snake;
+        let food;
+        let dx, dy; // Direction vector
+        let score;
+        let gameLoopInterval;
+        let currentSpeed;
+        let isMoving; // Prevent immediate reverse direction
+        let gameRunning = false;
+
+        // --- DOM Elements ---
+        const scoreDisplay = document.getElementById('score');
+        const speedDisplay = document.getElementById('speed');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // --- Initialization ---
+
+        window.onload = function() {
+            canvas = document.getElementById('game-board');
+            ctx = canvas.getContext('2d');
+            
+            // Wait for user input to start the first game
+            gameOverScreen.style.display = 'flex';
+            document.getElementById('final-score').innerText = 'N/A';
+            document.querySelector('#game-over-screen h1').innerText = 'SNAKE GAME';
+            document.querySelector('#game-over-screen p').innerText = 'Press Start to Play';
+            document.querySelector('#game-over-screen button').innerText = 'Start Game';
+        };
+
+        function startGame() {
+            if (gameRunning) return;
+            
+            // Reset state
+            snake = [{x: 10, y: 10}, {x: 9, y: 10}]; // Start with 2 segments
+            dx = 1; // Moving right
+            dy = 0;
+            score = 0;
+            currentSpeed = INITIAL_SPEED_MS;
+            isMoving = true;
+            gameRunning = true;
+
+            scoreDisplay.innerText = score;
+            speedDisplay.innerText = 1;
+            gameOverScreen.style.display = 'none';
+
+            spawnFood();
+            
+            // Start the main loop
+            startLoop();
+
+            // Set up keyboard listeners once
+            document.removeEventListener('keydown', changeDirection); 
+            document.addEventListener('keydown', changeDirection);
+        }
+
+        function startLoop() {
+            clearInterval(gameLoopInterval); // Clear any existing loop
+            gameLoopInterval = setInterval(gameLoop, currentSpeed);
+        }
+
+        // --- Core Drawing and Movement ---
+
+        function drawGrid() {
+            ctx.strokeStyle = '#020210'; // Dark blue grid lines
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= GRID_SIZE; i++) {
+                // Vertical lines
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, CANVAS_SIZE);
+                ctx.stroke();
+
+                // Horizontal lines
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(CANVAS_SIZE, i * CELL_SIZE);
+                ctx.stroke();
+            }
+        }
+
+        function draw() {
+            // Clear the board
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            
+            drawGrid();
+
+            // Draw Food
+            ctx.fillStyle = 'red';
+            ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+            // Draw Snake
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#0F0' : '#090'; // Head is brighter green
+                ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                
+                // Add border/style for defined segments
+                ctx.strokeStyle = '#000';
+                ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            });
+        }
+
+        function moveSnake() {
+            if (!isMoving) return; // Wait for the next loop tick
+
+            // 1. Calculate new head position
+            const newHead = {
+                x: snake[0].x + dx,
+                y: snake[0].y + dy
+            };
+
+            // 2. Check for Game Over conditions
+            if (
+                newHead.x < 0 || 
+                newHead.x >= GRID_SIZE || 
+                newHead.y < 0 || 
+                newHead.y >= GRID_SIZE ||
+                checkSelfCollision(newHead)
+            ) {
+                gameOver();
+                return;
+            }
+
+            // 3. Move the snake: Add new head
+            snake.unshift(newHead);
+
+            // 4. Check for food consumption
+            if (newHead.x === food.x && newHead.y === food.y) {
+                score++;
+                scoreDisplay.innerText = score;
+                spawnFood();
+
+                // Check for speed increase (Infinite Concept)
+                if (score > 0 && score % SPEED_INCREASE_INTERVAL === 0) {
+                    // Decrease interval time (increase speed)
+                    currentSpeed = Math.max(50, currentSpeed - SPEED_DECREMENT);
+                    
+                    // Display level (1 is base speed, +1 for every speed increase)
+                    const level = 1 + Math.floor(score / SPEED_INCREASE_INTERVAL);
+                    speedDisplay.innerText = level;
+                    
+                    // Restart the loop with the new speed
+                    startLoop();
+                }
+            } else {
+                // Remove the tail if no food was eaten
+                snake.pop();
+            }
+            
+            isMoving = true; // Allow new input on the next tick
+        }
+
+        function gameLoop() {
+            moveSnake();
+            draw();
+        }
+
+        // --- Helper Functions ---
+
+        function getRandomCoordinate() {
+            return Math.floor(Math.random() * GRID_SIZE);
+        }
+
+        function spawnFood() {
+            let newFood;
+            let onSnake;
+            
+            do {
+                newFood = { x: getRandomCoordinate(), y: getRandomCoordinate() };
+                onSnake = snake.some(segment => segment.x === newFood.x && segment.y === newFood.y);
+            } while (onSnake);
+            
+            food = newFood;
+        }
+
+        function checkSelfCollision(head) {
+            // Start checking from the second segment (index 1)
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function changeDirection(event) {
+            if (!gameRunning || !isMoving) return;
+
+            const keyPressed = event.key;
+            
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingLeft = dx === -1;
+            const goingRight = dx === 1;
+
+            let newDx = dx;
+            let newDy = dy;
+
+            // Use WASD or Arrow Keys
+            if ((keyPressed === 'ArrowLeft' || keyPressed === 'a') && !goingRight) {
+                newDx = -1; newDy = 0;
+            } else if ((keyPressed === 'ArrowRight' || keyPressed === 'd') && !goingLeft) {
+                newDx = 1; newDy = 0;
+            } else if ((keyPressed === 'ArrowUp' || keyPressed === 'w') && !goingDown) {
+                newDx = 0; newDy = -1;
+            } else if ((keyPressed === 'ArrowDown' || keyPressed === 's') && !goingUp) {
+                newDx = 0; newDy = 1;
+            }
+
+            // Only update direction if it changed
+            if (newDx !== dx || newDy !== dy) {
+                dx = newDx;
+                dy = newDy;
+                isMoving = false; // Block further changes until the next move tick
+            }
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            clearInterval(gameLoopInterval);
+            
+            finalScoreDisplay.innerText = score;
+            document.querySelector('#game-over-screen h1').innerText = 'GAME OVER!';
+            document.querySelector('#game-over-screen p').innerText = `Final Score: ${score}`;
+            document.querySelector('#game-over-screen button').innerText = 'Play Again';
+            gameOverScreen.style.display = 'flex';
+        }
+
+    </script>
+</body>
+</html>

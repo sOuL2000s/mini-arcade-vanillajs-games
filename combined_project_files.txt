@@ -1,0 +1,3982 @@
+
+--- START FILE: ai-survival-arena.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Survival Arena</title>
+    <style>
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #1a1a1a;
+            font-family: sans-serif;
+            overflow: hidden;
+        }
+
+        #gameContainer {
+            position: relative;
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
+            border: 2px solid #00ffff;
+        }
+
+        #gameCanvas {
+            display: block;
+            background-color: #000000;
+        }
+
+        #uiOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none; /* Allows mouse clicks to pass through */
+            color: #00ffff;
+            padding: 10px;
+            box-sizing: border-box;
+            font-size: 20px;
+        }
+
+        #gameOverScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.85);
+            color: #ff4444;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            font-size: 30px;
+            display: none; /* Hidden initially */
+            pointer-events: all; /* Important to allow restart button clicks */
+        }
+
+        #restartButton {
+            margin-top: 20px;
+            padding: 10px 20px;
+            font-size: 24px;
+            cursor: pointer;
+            background-color: #00ffff;
+            color: #1a1a1a;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        #restartButton:hover {
+            background-color: #ffffff;
+        }
+    </style>
+</head>
+<body>
+
+<div id="gameContainer">
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="uiOverlay">
+        Score: <span id="scoreDisplay">0</span>
+    </div>
+
+    <div id="gameOverScreen">
+        <h1>GAME OVER</h1>
+        <p>You survived the AI onslaught!</p>
+        <p>Final Score: <span id="finalScore">0</span></p>
+        <button id="restartButton">Restart Arena</button>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const UI_SCORE = document.getElementById('scoreDisplay');
+        const GAME_OVER_SCREEN = document.getElementById('gameOverScreen');
+        const FINAL_SCORE = document.getElementById('finalScore');
+        const RESTART_BUTTON = document.getElementById('restartButton');
+
+        // --- Game Constants ---
+        const CANVAS_WIDTH = canvas.width;
+        const CANVAS_HEIGHT = canvas.height;
+        const PLAYER_RADIUS = 10;
+        const PROJECTILE_SPEED = 8;
+        const PROJECTILE_SIZE = 2;
+
+        // --- Game State ---
+        let gameLoopId;
+        let score = 0;
+        let isGameOver = false;
+        let keys = {};
+        let mousePos = { x: 0, y: 0 };
+        let lastUpdateTime = 0;
+        let lastEnemySpawnTime = 0;
+        let baseEnemySpawnInterval = 2000; // ms
+        let enemies = [];
+        let projectiles = [];
+        let player = null;
+
+        // --- Utility Functions ---
+
+        /** Calculates distance between two points */
+        function dist(x1, y1, x2, y2) {
+            return Math.hypot(x2 - x1, y2 - y1);
+        }
+
+        /** Normalizes a vector */
+        function normalize(dx, dy) {
+            const length = Math.hypot(dx, dy);
+            if (length === 0) return { x: 0, y: 0 };
+            return { x: dx / length, y: dy / length };
+        }
+
+        // --- Entity Classes ---
+
+        class Player {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = PLAYER_RADIUS;
+                this.speed = 4;
+            }
+
+            update() {
+                if (isGameOver) return;
+
+                let dx = 0;
+                let dy = 0;
+
+                // WASD or Arrow Keys
+                if (keys['w'] || keys['ArrowUp']) dy -= 1;
+                if (keys['s'] || keys['ArrowDown']) dy += 1;
+                if (keys['a'] || keys['ArrowLeft']) dx -= 1;
+                if (keys['d'] || keys['ArrowRight']) dx += 1;
+
+                const vector = normalize(dx, dy);
+
+                this.x += vector.x * this.speed;
+                this.y += vector.y * this.speed;
+
+                // Boundary checking
+                this.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.x));
+                this.y = Math.max(this.radius, Math.min(CANVAS_HEIGHT - this.radius, this.y));
+            }
+
+            draw() {
+                ctx.fillStyle = '#00ffff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        class Enemy {
+            constructor(x, y, levelMultiplier) {
+                this.x = x;
+                this.y = y;
+                this.size = 15;
+                // Base speed scales up steadily over time
+                this.baseSpeed = 1.5;
+                this.speed = this.baseSpeed + (levelMultiplier * 0.2); // Scaling factor
+                this.color = '#ff4444';
+                this.active = true;
+            }
+
+            // FSM: Chase State
+            update() {
+                if (!this.active || !player) return;
+
+                const dx = player.x - this.x;
+                const dy = player.y - this.y;
+
+                const vector = normalize(dx, dy);
+
+                this.x += vector.x * this.speed;
+                this.y += vector.y * this.speed;
+
+                // Check collision with player
+                if (dist(this.x, this.y, player.x, player.y) < this.size / 2 + player.radius) {
+                    gameOver();
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
+            }
+        }
+
+        class Projectile {
+            constructor(x, y, velocityX, velocityY) {
+                this.x = x;
+                this.y = y;
+                this.radius = PROJECTILE_SIZE;
+                this.vx = velocityX;
+                this.vy = velocityY;
+                this.color = '#ffffff';
+                this.active = true;
+            }
+
+            update() {
+                if (!this.active) return;
+                this.x += this.vx;
+                this.y += this.vy;
+
+                // Check boundaries
+                if (this.x < 0 || this.x > CANVAS_WIDTH || this.y < 0 || this.y > CANVAS_HEIGHT) {
+                    this.active = false;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // --- Game Logic ---
+
+        function initGame() {
+            isGameOver = false;
+            score = 0;
+            UI_SCORE.textContent = 0;
+            enemies = [];
+            projectiles = [];
+            lastEnemySpawnTime = 0;
+            lastUpdateTime = performance.now();
+            
+            player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+            GAME_OVER_SCREEN.style.display = 'none';
+
+            if (gameLoopId) {
+                cancelAnimationFrame(gameLoopId);
+            }
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function spawnEnemy(levelMultiplier) {
+            // Determine spawn point far outside the canvas edge
+            let x, y;
+            const buffer = 50;
+
+            const edge = Math.floor(Math.random() * 4); // 0: Top, 1: Bottom, 2: Left, 3: Right
+
+            switch (edge) {
+                case 0: // Top
+                    x = Math.random() * CANVAS_WIDTH;
+                    y = -buffer;
+                    break;
+                case 1: // Bottom
+                    x = Math.random() * CANVAS_WIDTH;
+                    y = CANVAS_HEIGHT + buffer;
+                    break;
+                case 2: // Left
+                    x = -buffer;
+                    y = Math.random() * CANVAS_HEIGHT;
+                    break;
+                case 3: // Right
+                    x = CANVAS_WIDTH + buffer;
+                    y = Math.random() * CANVAS_HEIGHT;
+                    break;
+            }
+
+            enemies.push(new Enemy(x, y, levelMultiplier));
+        }
+
+        function checkCollisions() {
+            // 1. Projectile vs Enemy Collision
+            projectiles.forEach(p => {
+                if (!p.active) return;
+                
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    if (!e.active) continue;
+
+                    if (dist(p.x, p.y, e.x, e.y) < e.size / 2 + p.radius) {
+                        // Collision! Destroy both.
+                        p.active = false;
+                        e.active = false;
+                        score++;
+                        UI_SCORE.textContent = score;
+                        break; // Projectile is used up
+                    }
+                }
+            });
+
+            // Clean up inactive entities
+            projectiles = projectiles.filter(p => p.active);
+            enemies = enemies.filter(e => e.active);
+        }
+        
+        function handleSpawningAndScaling(currentTime) {
+            const timeElapsed = currentTime - lastUpdateTime;
+            
+            // Calculate level multiplier based on game time (seconds)
+            const gameTimeSeconds = Math.floor(currentTime / 1000);
+            const levelMultiplier = Math.floor(gameTimeSeconds / 10); // Increases every 10 seconds
+
+            // Calculate current required spawn interval (scales down over time)
+            // Minimum interval is 300ms
+            const spawnInterval = Math.max(300, baseEnemySpawnInterval - (gameTimeSeconds * 50));
+
+            if (currentTime - lastEnemySpawnTime > spawnInterval) {
+                spawnEnemy(levelMultiplier);
+                lastEnemySpawnTime = currentTime;
+            }
+        }
+
+        function updateGame(currentTime) {
+            if (isGameOver) return;
+
+            handleSpawningAndScaling(currentTime);
+
+            player.update();
+            enemies.forEach(e => e.update());
+            projectiles.forEach(p => p.update());
+
+            checkCollisions();
+        }
+
+        function drawGame() {
+            ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+            projectiles.forEach(p => p.draw());
+            enemies.forEach(e => e.draw());
+            player.draw();
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            cancelAnimationFrame(gameLoopId);
+            
+            FINAL_SCORE.textContent = score;
+            GAME_OVER_SCREEN.style.display = 'flex';
+        }
+
+        function gameLoop(currentTime) {
+            lastUpdateTime = currentTime;
+
+            updateGame(currentTime);
+            drawGame();
+
+            if (!isGameOver) {
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // --- Event Listeners ---
+
+        // Player shooting
+        canvas.addEventListener('click', (event) => {
+            if (isGameOver || !player) return;
+
+            // Get mouse position relative to canvas
+            const rect = canvas.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const mouseY = event.clientY - rect.top;
+
+            // Calculate direction vector from player to mouse
+            const dx = mouseX - player.x;
+            const dy = mouseY - player.y;
+
+            const vector = normalize(dx, dy);
+
+            // Create projectile, launching from player center
+            const p = new Projectile(
+                player.x + vector.x * (player.radius + 1), // Start just outside player edge
+                player.y + vector.y * (player.radius + 1),
+                vector.x * PROJECTILE_SPEED,
+                vector.y * PROJECTILE_SPEED
+            );
+            projectiles.push(p);
+        });
+
+        // Key Press Handling for smooth movement
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+        });
+
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // Restart Button
+        RESTART_BUTTON.addEventListener('click', initGame);
+
+        // Start the game initialization
+        initGame();
+    });
+</script>
+
+</body>
+</html>
+
+--- END FILE: ai-survival-arena.html ---
+
+--- START FILE: bullet-hell-survival.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bullet Hell Survival</title>
+    <!-- All required CSS, structure, and JS are contained in this single file -->
+</head>
+<body>
+
+<style>
+    body {
+        margin: 0;
+        overflow: hidden;
+        background-color: #111;
+        font-family: monospace;
+        color: white;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+    }
+    #game-container {
+        position: relative;
+        box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+    }
+    canvas {
+        display: block;
+        background-color: #000;
+        border: 2px solid #333;
+    }
+    #ui-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        padding: 10px;
+        box-sizing: border-box;
+        text-shadow: 0 0 5px black;
+        z-index: 10;
+    }
+    #game-over-screen {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: rgba(0, 0, 0, 0.8);
+        display: none;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        text-align: center;
+        font-size: 24px;
+        z-index: 20;
+    }
+    #game-over-screen h1 {
+        color: #ff4444;
+        font-size: 3em;
+        margin-bottom: 0.5em;
+    }
+    #restart-button {
+        padding: 10px 20px;
+        margin-top: 20px;
+        font-size: 1.2em;
+        cursor: pointer;
+        background-color: #4CAF50;
+        color: white;
+        border: none;
+        border-radius: 5px;
+        transition: background-color 0.3s;
+    }
+    #restart-button:hover {
+        background-color: #45a049;
+    }
+</style>
+
+<div id="game-container">
+    <div id="ui-overlay">
+        Score: <span id="score-display">0</span> ms | Bullets: <span id="bullet-count">0</span>
+        <div style="float: right;">Movement: WASD / Arrows</div>
+    </div>
+    <canvas id="gameCanvas"></canvas>
+
+    <div id="game-over-screen">
+        <h1>GAME OVER</h1>
+        <p>Survival Time: <span id="final-score">0</span> ms</p>
+        <p>Highest Difficulty Achieved: <span id="final-difficulty">1.0</span></p>
+        <button id="restart-button">Play Again</button>
+    </div>
+</div>
+
+<script>
+    // --- Configuration ---
+    const CANVAS_WIDTH = 800;
+    const CANVAS_HEIGHT = 600;
+
+    // --- Game State Variables ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = CANVAS_WIDTH;
+    canvas.height = CANVAS_HEIGHT;
+
+    let gameRunning = false;
+    let startTime;
+    let score = 0;
+    let frameCounter = 0;
+    let difficultyMultiplier = 1.0;
+
+    const player = {
+        x: CANVAS_WIDTH / 2,
+        y: CANVAS_HEIGHT / 2,
+        radius: 8,
+        speed: 4,
+        color: '#88C0D0'
+    };
+
+    let bullets = [];
+    const bulletBaseRadius = 3;
+    const bulletBaseSpeed = 3.5;
+    const keys = {};
+
+    // --- UI Elements ---
+    const scoreDisplay = document.getElementById('score-display');
+    const bulletCountDisplay = document.getElementById('bullet-count');
+    const gameOverScreen = document.getElementById('game-over-screen');
+    const finalScoreDisplay = document.getElementById('final-score');
+    const finalDifficultyDisplay = document.getElementById('final-difficulty');
+    const restartButton = document.getElementById('restart-button');
+
+    // --- Input Handling ---
+    document.addEventListener('keydown', (e) => {
+        if (gameRunning) {
+            keys[e.key] = true;
+            // Prevent scrolling
+            if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
+                e.preventDefault();
+            }
+        }
+    });
+
+    document.addEventListener('keyup', (e) => {
+        if (gameRunning) {
+            keys[e.key] = false;
+        }
+    });
+
+    restartButton.addEventListener('click', () => {
+        startGame();
+    });
+
+    // --- Core Game Functions ---
+
+    function startGame() {
+        // Reset state
+        player.x = CANVAS_WIDTH / 2;
+        player.y = CANVAS_HEIGHT / 2;
+        bullets = [];
+        score = 0;
+        frameCounter = 0;
+        difficultyMultiplier = 1.0;
+        startTime = performance.now();
+
+        gameOverScreen.style.display = 'none';
+        gameRunning = true;
+
+        // Start the main loop
+        requestAnimationFrame(gameLoop);
+    }
+
+    function endGame() {
+        gameRunning = false;
+        const totalSurvivalTime = Math.floor(performance.now() - startTime);
+        
+        finalScoreDisplay.textContent = totalSurvivalTime;
+        finalDifficultyDisplay.textContent = difficultyMultiplier.toFixed(2);
+        
+        gameOverScreen.style.display = 'flex';
+        // Clear any lingering key presses so movement doesn't trigger on restart
+        for (let key in keys) {
+            keys[key] = false;
+        }
+    }
+
+    // --- Update Logic ---
+
+    function updatePlayer() {
+        let dx = 0;
+        let dy = 0;
+
+        // Check WASD or Arrow Keys
+        if (keys['w'] || keys['W'] || keys['ArrowUp']) dy -= player.speed;
+        if (keys['s'] || keys['S'] || keys['ArrowDown']) dy += player.speed;
+        if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= player.speed;
+        if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += player.speed;
+
+        // Diagonal movement normalization (prevents faster diagonal movement)
+        if (dx !== 0 && dy !== 0) {
+            const magnitude = Math.sqrt(dx * dx + dy * dy);
+            dx = (dx / magnitude) * player.speed;
+            dy = (dy / magnitude) * player.speed;
+        }
+
+        player.x += dx;
+        player.y += dy;
+
+        // Keep player within bounds
+        player.x = Math.max(player.radius, Math.min(CANVAS_WIDTH - player.radius, player.x));
+        player.y = Math.max(player.radius, Math.min(CANVAS_HEIGHT - player.radius, player.y));
+    }
+
+    function updateBullets() {
+        // Optimize: Use standard loop for high performance
+        let i = bullets.length;
+        while (i--) {
+            const bullet = bullets[i];
+            
+            bullet.x += bullet.dx;
+            bullet.y += bullet.dy;
+
+            // Collision Check (Distance squared for speed optimization, though Math.hypot is often faster in modern JS)
+            const dist = Math.hypot(player.x - bullet.x, player.y - bullet.y);
+            
+            if (dist < player.radius + bullet.radius) {
+                endGame();
+                return; // Stop processing instantly on collision
+            }
+
+            // Remove bullets far outside the screen bounds
+            const buffer = 50;
+            if (bullet.x < -buffer || bullet.x > CANVAS_WIDTH + buffer ||
+                bullet.y < -buffer || bullet.y > CANVAS_HEIGHT + buffer) 
+            {
+                bullets.splice(i, 1);
+            }
+        }
+    }
+
+    function updateDifficulty() {
+        // Difficulty scales by 0.1 every 5 seconds (300 frames at 60 FPS)
+        const elapsedSeconds = (performance.now() - startTime) / 1000;
+        difficultyMultiplier = 1.0 + (elapsedSeconds / 5) * 0.15;
+    }
+
+    // --- Bullet Spawning Functions ---
+
+    function spawnBullet(startX, startY, angleRadians) {
+        // Base speed scaled by difficulty
+        const speed = bulletBaseSpeed * difficultyMultiplier;
+        
+        bullets.push({
+            x: startX,
+            y: startY,
+            radius: bulletBaseRadius,
+            dx: Math.cos(angleRadians) * speed,
+            dy: Math.sin(angleRadians) * speed,
+            color: '#FF4444' // Red bullets
+        });
+    }
+
+    function spawnPatterns() {
+        const center = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
+        
+        // Dynamic spawn rate (more bullets as difficulty increases)
+        const spawnRate = Math.max(1, Math.floor(6 / difficultyMultiplier));
+
+        if (frameCounter % spawnRate !== 0) return;
+
+        // Pattern 1: Expanding Spiral (0 to 180 frames)
+        if ((frameCounter % 360) < 180) {
+            const spiralAngle = (frameCounter * 0.1) % (2 * Math.PI);
+            
+            for (let i = 0; i < 3; i++) {
+                // Launch three bullets slightly spread out
+                spawnBullet(center.x, center.y, spiralAngle + i * 0.1);
+            }
+        }
+        // Pattern 2: Edge Waves / Target Streams (180 to 360 frames)
+        else {
+            const streamSpeedMod = 0.5 + difficultyMultiplier * 0.5;
+
+            // Spawn from alternating corners
+            let spawnX, spawnY;
+            if (frameCounter % 4 === 0) {
+                spawnX = 0; spawnY = 0;
+            } else if (frameCounter % 4 === 1) {
+                spawnX = CANVAS_WIDTH; spawnY = 0;
+            } else if (frameCounter % 4 === 2) {
+                spawnX = 0; spawnY = CANVAS_HEIGHT;
+            } else {
+                spawnX = CANVAS_WIDTH; spawnY = CANVAS_HEIGHT;
+            }
+
+            // Calculate angle directly towards the player's current position
+            const angleToPlayer = Math.atan2(player.y - spawnY, player.x - spawnX);
+
+            // Launch a stream aiming slightly ahead or behind based on time
+            const wobble = Math.sin(frameCounter * 0.05) * 0.3;
+            spawnBullet(spawnX, spawnY, angleToPlayer + wobble);
+        }
+        
+    }
+
+    // --- Drawing Functions ---
+
+    function draw() {
+        // Clear canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // Draw Player
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
+        ctx.fillStyle = player.color;
+        ctx.fill();
+        
+        // Draw Bullets (Optimized for drawing many circles)
+        // Group all drawing operations for performance
+        ctx.fillStyle = '#FF4444'; 
+        for (const bullet of bullets) {
+            ctx.beginPath();
+            ctx.arc(bullet.x, bullet.y, bullet.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    }
+
+    function updateUI() {
+        score = Math.floor(performance.now() - startTime);
+        scoreDisplay.textContent = score;
+        bulletCountDisplay.textContent = bullets.length;
+    }
+
+    // --- Main Loop ---
+
+    function gameLoop(timestamp) {
+        if (!gameRunning) return;
+
+        frameCounter++;
+        
+        updatePlayer();
+        updateDifficulty();
+        spawnPatterns();
+        updateBullets(); // This handles collision detection
+        
+        draw();
+        updateUI();
+
+        requestAnimationFrame(gameLoop);
+    }
+
+    // Initialize the game structure
+    startGame();
+
+</script>
+
+</body>
+</html>
+
+--- END FILE: bullet-hell-survival.html ---
+
+--- START FILE: endless-runner.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Vanilla JS Endless Runner</title>
+    <style>
+        /* Global Styles */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #f0f0f0;
+            font-family: Arial, sans-serif;
+            overflow: hidden;
+        }
+
+        /* Game Container Styling */
+        #game-container {
+            width: 800px;
+            height: 250px;
+            border: 5px solid #333;
+            background-color: #87ceeb; /* Sky */
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            position: relative;
+            overflow: hidden; /* Crucial for clipping obstacles */
+            cursor: pointer;
+        }
+
+        /* Ground Styling */
+        #ground {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 20px;
+            background-color: #2e8b57; /* Darker Green */
+            border-top: 3px solid #1e623a;
+        }
+
+        /* Player Styling */
+        #player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #ff4500;
+            bottom: 20px; /* Starts on the ground */
+            left: 50px;
+            border: 2px solid #a03000;
+            z-index: 10;
+            transition: background-color 0.1s;
+        }
+
+        /* Score Display */
+        #score-display {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #333;
+            text-shadow: 1px 1px 0 #fff;
+        }
+
+        /* Game Over Screen */
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            display: none; /* Hidden by default */
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 20;
+        }
+        #game-over-screen h2 {
+            margin-bottom: 5px;
+        }
+        #game-over-screen button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            margin-top: 20px;
+            border: none;
+            background-color: #4CAF50;
+            color: white;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+        #game-over-screen button:hover {
+            background-color: #45a049;
+        }
+
+        /* Obstacle base style (dynamic elements will inherit this) */
+        .obstacle {
+            position: absolute;
+            background-color: #444;
+            border: 1px solid #222;
+            z-index: 5;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="ground"></div>
+        <div id="player"></div>
+        <div id="score-display">Score: 0.00s</div>
+
+        <div id="game-over-screen">
+            <h2>GAME OVER</h2>
+            <p id="final-score">Time Survived: 0.00s</p>
+            <button onclick="restartGame()">Restart</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME VARIABLES & STATE ---
+        const GAME_AREA_HEIGHT = 250;
+        const GROUND_HEIGHT = 20;
+        const PLAYER_SIZE = 30;
+        const PLAYER_START_X = 50;
+        const INITIAL_JUMP_VELOCITY = -13;
+        const GRAVITY = 0.7;
+        const DIFFICULTY_SCALING_TIME = 10000; // Increase speed every 10 seconds (10000 ms)
+        const SPEED_INCREMENT = 1.5; // How much speed increases
+
+        let gameSpeed = 6; // Initial speed (pixels per frame)
+        let playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+        let velocityY = 0;
+        let isJumping = false;
+        let isGameOver = true;
+        let obstacles = [];
+
+        let score = 0;
+        let lastFrameTime = Date.now();
+        let lastSpeedIncreaseTime = Date.now();
+        let animationFrameId;
+        let obstacleSpawnTimeout;
+
+        // --- DOM ELEMENTS ---
+        const gameContainer = document.getElementById('game-container');
+        const player = document.getElementById('player');
+        const scoreDisplay = document.getElementById('score-display');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // --- CORE GAME LOOP FUNCTIONS ---
+
+        function startGame() {
+            // Reset state
+            isGameOver = false;
+            gameSpeed = 6;
+            score = 0;
+            obstacles = [];
+            lastFrameTime = Date.now();
+            lastSpeedIncreaseTime = Date.now();
+            playerY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+            velocityY = 0;
+            isJumping = false;
+
+            // Clear existing obstacles from DOM
+            document.querySelectorAll('.obstacle').forEach(o => o.remove());
+            
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+
+            // Start game processes
+            player.style.backgroundColor = '#ff4500';
+            gameLoop();
+            scheduleNextObstacle();
+        }
+
+        function gameLoop() {
+            if (isGameOver) {
+                cancelAnimationFrame(animationFrameId);
+                return;
+            }
+
+            const now = Date.now();
+            const deltaTime = now - lastFrameTime; // Time elapsed since last frame
+            lastFrameTime = now;
+
+            updateScore(deltaTime);
+            checkSpeedScaling(now);
+            updatePlayer();
+            updateObstacles();
+            checkCollision();
+
+            // Request next frame
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        // --- PLAYER MECHANICS ---
+
+        function jump() {
+            if (!isJumping && !isGameOver) {
+                isJumping = true;
+                velocityY = INITIAL_JUMP_VELOCITY;
+            }
+        }
+
+        function updatePlayer() {
+            // 1. Apply Gravity
+            velocityY += GRAVITY;
+            playerY += velocityY;
+
+            // 2. Check Ground Collision (y-axis)
+            const groundY = GAME_AREA_HEIGHT - GROUND_HEIGHT - PLAYER_SIZE;
+            if (playerY >= groundY) {
+                playerY = groundY;
+                velocityY = 0;
+                isJumping = false;
+            }
+
+            // 3. Update DOM position
+            player.style.top = `${playerY}px`;
+        }
+
+        // --- OBSTACLE MECHANICS ---
+
+        function spawnObstacle() {
+            if (isGameOver) return;
+
+            const minWidth = 15;
+            const maxWidth = 50;
+            const minHeight = 20;
+            const maxHeight = 60;
+
+            const width = Math.floor(Math.random() * (maxWidth - minWidth + 1)) + minWidth;
+            const height = Math.floor(Math.random() * (maxHeight - minHeight + 1)) + minHeight;
+            
+            const obstacleEl = document.createElement('div');
+            obstacleEl.className = 'obstacle';
+            obstacleEl.style.width = `${width}px`;
+            obstacleEl.style.height = `${height}px`;
+            
+            // Position obstacle at the right edge, sitting on the ground
+            const startX = gameContainer.offsetWidth; 
+            const startY = GAME_AREA_HEIGHT - GROUND_HEIGHT - height;
+
+            obstacleEl.style.left = `${startX}px`;
+            obstacleEl.style.top = `${startY}px`;
+
+            gameContainer.appendChild(obstacleEl);
+
+            // Store object data for physics
+            obstacles.push({
+                element: obstacleEl,
+                x: startX,
+                width: width,
+                height: height
+            });
+            
+            scheduleNextObstacle();
+        }
+
+        function scheduleNextObstacle() {
+            // Randomize spawn time for unpredictable difficulty
+            const minSpawnTime = 1000;
+            const maxSpawnTime = 2500;
+            const spawnDelay = Math.random() * (maxSpawnTime - minSpawnTime) + minSpawnTime;
+            
+            clearTimeout(obstacleSpawnTimeout);
+            obstacleSpawnTimeout = setTimeout(spawnObstacle, spawnDelay / (gameSpeed / 6)); // Shorter delay as speed increases
+        }
+
+        function updateObstacles() {
+            const newObstacles = [];
+            
+            for (let i = 0; i < obstacles.length; i++) {
+                const obs = obstacles[i];
+                
+                // Move left based on current game speed
+                obs.x -= gameSpeed;
+                obs.element.style.left = `${obs.x}px`;
+
+                // Check if obstacle is still on screen
+                if (obs.x + obs.width > 0) {
+                    newObstacles.push(obs);
+                } else {
+                    // Remove off-screen obstacles from the DOM
+                    obs.element.remove();
+                }
+            }
+            obstacles = newObstacles; // Update the active obstacle list
+        }
+
+        // --- GAME LOGIC & SCORING ---
+
+        function checkSpeedScaling(now) {
+            if (now - lastSpeedIncreaseTime > DIFFICULTY_SCALING_TIME) {
+                gameSpeed += SPEED_INCREMENT;
+                lastSpeedIncreaseTime = now;
+                console.log(`Speed Increased! New speed: ${gameSpeed.toFixed(1)}`);
+            }
+        }
+
+        function updateScore(deltaTime) {
+            score += deltaTime / 1000; // Convert milliseconds to seconds
+            scoreDisplay.textContent = `Score: ${score.toFixed(2)}s`;
+        }
+
+        function checkCollision() {
+            const pX = PLAYER_START_X;
+            const pY = playerY;
+            const pW = PLAYER_SIZE;
+            const pH = PLAYER_SIZE;
+
+            for (const obs of obstacles) {
+                const oX = obs.x;
+                const oW = obs.width;
+                const oH = obs.height;
+                const oY = GAME_AREA_HEIGHT - GROUND_HEIGHT - oH;
+
+                // Collision Detection: Bounding Box Check
+                const overlapX = (pX < oX + oW) && (pX + pW > oX);
+                const overlapY = (pY + pH > oY); // Player bottom is below obstacle top
+
+                if (overlapX && overlapY) {
+                    gameOver();
+                    return;
+                }
+            }
+        }
+
+        function gameOver() {
+            isGameOver = true;
+            clearTimeout(obstacleSpawnTimeout);
+            cancelAnimationFrame(animationFrameId);
+
+            player.style.backgroundColor = '#990000'; // Change color on death
+            
+            finalScoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
+            gameOverScreen.style.display = 'flex';
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        // --- INITIALIZATION & EVENT LISTENERS ---
+
+        function init() {
+            // Event listener for space bar and screen click
+            document.addEventListener('keydown', (e) => {
+                if (e.code === 'Space') {
+                    e.preventDefault(); // Prevent scrolling
+                    jump();
+                }
+            });
+            gameContainer.addEventListener('click', jump);
+
+            // Start the game initially
+            startGame();
+        }
+
+        // Wait for the DOM to be fully loaded before initializing
+        window.onload = init;
+
+    </script>
+</body>
+</html>
+
+--- END FILE: endless-runner.html ---
+
+--- START FILE: infinite-city-builder.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Minimalist Infinite City Builder</title>
+    <style>
+        /* --- GLOBAL STYLES --- */
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #333;
+            font-family: Arial, sans-serif;
+            color: #fff;
+            overflow: hidden; /* Prevent body scroll, use container scroll */
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+        }
+
+        /* --- UI STYLES --- */
+        #ui {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px 15px;
+            border-radius: 5px;
+            z-index: 100;
+            user-select: none;
+        }
+        #ui p {
+            margin: 5px 0;
+        }
+        .key-hint {
+            color: #ccc;
+            font-size: 0.9em;
+        }
+        #selected-type {
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .color-R { color: #f00; }
+        .color-C { color: #ff0; }
+        .color-I { color: #00f; }
+
+        /* --- GAME CONTAINER & SCROLLING --- */
+        #game-container {
+            flex-grow: 1;
+            overflow: scroll; /* Allows the map to be scrolled infinitely */
+            cursor: crosshair;
+            /* Center map roughly in view */
+            margin-top: calc(50vh - 50px);
+            margin-left: calc(50vw - 50px);
+        }
+
+        /* --- MAP GRID STYLES --- */
+        #map {
+            display: grid;
+            background-color: #222;
+            transition: width 0.3s, height 0.3s; /* Smooth expansion */
+            will-change: transform, width, height;
+        }
+
+        .tile {
+            width: 30px;
+            height: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-sizing: border-box;
+            background-color: #383838; /* Empty land */
+        }
+
+        /* Building Colors */
+        .R { background-color: #00f; } /* Residential - Blue */
+        .C { background-color: #ff0; } /* Commercial - Yellow */
+        .I { background-color: #f00; } /* Industrial - Red */
+    </style>
+</head>
+<body>
+
+    <div id="ui">
+        <p>Score: <span id="score-display">0</span></p>
+        <p>Building: <span id="selected-type">Residential</span></p>
+        <p class="key-hint">Keys: 1 (R), 2 (C), 3 (I)</p>
+        <p class="key-hint">Click near edges to expand map!</p>
+    </div>
+
+    <div id="game-container">
+        <div id="map">
+            <!-- Tiles will be dynamically injected here -->
+        </div>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS ---
+        const TILE_SIZE = 30; // px
+        const INITIAL_MAP_SIZE = 100; // 100x100 tiles initially
+        const EXPANSION_THRESHOLD = 10; // Expand if clicked within 10 tiles of edge
+        const EXPANSION_AMOUNT = 50; // How many tiles to add on expansion
+
+        const BUILDING_TYPES = {
+            '1': { code: 'R', name: 'Residential', color: 'color-R' },
+            '2': { code: 'C', name: 'Commercial', color: 'color-C' },
+            '3': { code: 'I', name: 'Industrial', color: 'color-I' }
+        };
+
+        // --- GAME STATE ---
+        let state = {
+            score: 0,
+            currentTypeKey: '1',
+            gridSize: INITIAL_MAP_SIZE,
+            minCoord: 0, // Current minimum grid coordinate (row/col index)
+            maxCoord: INITIAL_MAP_SIZE - 1, // Current maximum grid coordinate
+            isExpanding: false
+        };
+
+        // --- DOM REFERENCES ---
+        const mapEl = document.getElementById('map');
+        const containerEl = document.getElementById('game-container');
+        const scoreDisplay = document.getElementById('score-display');
+        const typeDisplay = document.getElementById('selected-type');
+
+        // --- UTILITY FUNCTIONS ---
+
+        function updateUI() {
+            state.score++;
+            scoreDisplay.textContent = state.score;
+
+            const type = BUILDING_TYPES[state.currentTypeKey];
+            typeDisplay.textContent = type.name;
+            typeDisplay.className = type.color;
+        }
+
+        function changeBuilding(key) {
+            if (BUILDING_TYPES[key]) {
+                state.currentTypeKey = key;
+                updateUI(); // Update UI to reflect type change
+            }
+        }
+
+        // --- MAP INITIALIZATION & RENDERING ---
+
+        function setupInitialMap() {
+            mapEl.style.gridTemplateColumns = `repeat(${state.gridSize}, ${TILE_SIZE}px)`;
+            mapEl.style.gridTemplateRows = `repeat(${state.gridSize}, ${TILE_SIZE}px)`;
+            mapEl.style.width = `${state.gridSize * TILE_SIZE}px`;
+            mapEl.style.height = `${state.gridSize * TILE_SIZE}px`;
+
+            const fragment = document.createDocumentFragment();
+
+            for (let r = 0; r < state.gridSize; r++) {
+                for (let c = 0; c < state.gridSize; c++) {
+                    const tile = document.createElement('div');
+                    tile.className = 'tile';
+                    tile.dataset.r = r;
+                    tile.dataset.c = c;
+                    fragment.appendChild(tile);
+                }
+            }
+            mapEl.appendChild(fragment);
+
+            // Center the initial view
+            const centerScroll = (state.gridSize / 2 * TILE_SIZE) - (window.innerWidth / 2);
+            containerEl.scrollLeft = centerScroll;
+            containerEl.scrollTop = centerScroll;
+        }
+
+        // --- EXPANSION LOGIC ---
+
+        function expandMap(direction) {
+            if (state.isExpanding) return;
+            state.isExpanding = true;
+
+            const currentSize = state.gridSize;
+            const newSize = currentSize + EXPANSION_AMOUNT;
+            state.gridSize = newSize;
+
+            const fragment = document.createDocumentFragment();
+
+            let newCols = 0;
+            let newRows = 0;
+            let prepend = false;
+
+            if (direction === 'top' || direction === 'bottom') {
+                newRows = EXPANSION_AMOUNT;
+            }
+            if (direction === 'left' || direction === 'right') {
+                newCols = EXPANSION_AMOUNT;
+            }
+
+            // 1. Update Grid Dimensions (CSS)
+            mapEl.style.gridTemplateColumns = `repeat(${newSize}, ${TILE_SIZE}px)`;
+            mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
+            mapEl.style.width = `${newSize * TILE_SIZE}px`;
+            mapEl.style.height = `${newSize * TILE_SIZE}px`;
+
+            // 2. Generate new tiles
+            if (direction === 'bottom') {
+                // Add rows at the bottom
+                for (let r = currentSize; r < newSize; r++) {
+                    for (let c = 0; c < currentSize; c++) {
+                        const tile = createTile(r, c);
+                        fragment.appendChild(tile);
+                    }
+                }
+                mapEl.appendChild(fragment);
+
+            } else if (direction === 'right') {
+                // Add columns on the right (tricky, needs to insert rows interleaved)
+                let currentRowStart = currentSize * currentSize;
+                let newTiles = [];
+                for (let r = 0; r < currentSize; r++) {
+                    // Start index of the existing row (r * currentSize)
+                    const existingRowIndex = r * currentSize;
+                    
+                    // Generate new tiles for this row
+                    for (let c = currentSize; c < newSize; c++) {
+                        newTiles.push(createTile(r, c));
+                    }
+                }
+
+                // Since inserting into the DOM grid layout by simple appending/prepending is messy
+                // for edge columns, the safest method is often to rebuild or use careful insertion
+                // based on the grid index.
+                // Minimalist approach: We skip left/top expansion for simplicity and only implement
+                // right and bottom expansion, making the starting corner fixed (0,0).
+                
+                // Let's reset the assumption: For a minimalist builder, we simplify the infinite scrolling
+                // by *only* expanding downwards and rightwards. This avoids shifting coordinates and pre-pending
+                // which is complex in DOM grid. The origin (0,0) is always the top-left corner.
+
+                // Simplified Expansion (Only Rightward):
+                if (direction === 'right') {
+                     // Add EXPANSION_AMOUNT columns, interleaving them correctly
+                    for (let r = 0; r < currentSize; r++) {
+                        // Find the last tile of the current row
+                        const lastTileInRow = mapEl.querySelector(`[data-r="${r}"][data-c="${currentSize - 1}"]`);
+                        
+                        // Insert new tiles after it
+                        for (let c = currentSize; c < newSize; c++) {
+                            fragment.appendChild(createTile(r, c));
+                        }
+                        lastTileInRow.parentNode.insertBefore(fragment, lastTileInRow.nextSibling);
+                    }
+                }
+                
+            } else {
+                // Ignore top/left for minimalist version due to complex coordinate shifting requirements
+                // We rely on starting large and expanding only R/B
+                console.warn("Only bottom/right expansion supported in this minimal version.");
+            }
+            
+            // Allow expansion again shortly
+            setTimeout(() => { state.isExpanding = false; }, 300);
+        }
+
+        function createTile(r, c) {
+            const tile = document.createElement('div');
+            tile.className = 'tile';
+            tile.dataset.r = r;
+            tile.dataset.c = c;
+            return tile;
+        }
+
+
+        function checkAndExpandMap(r, c) {
+            const size = state.gridSize;
+
+            if (r >= size - EXPANSION_THRESHOLD) {
+                // Near bottom edge
+                expandMap('bottom');
+            }
+            
+            if (c >= size - EXPANSION_THRESHOLD) {
+                // Near right edge
+                // NOTE: Right expansion is complex with interleaved DOM updates. 
+                // For this minimal demo, we'll implement a simplified 1D expansion
+                // (expand width and height simultaneously on hitting any edge).
+                
+                // Simplified expansion if any edge is hit:
+                expandMap('bottom'); // Expand height
+                expandMap('right'); // Expand width (requires re-engineering, let's keep it 1D for ultra-minimalism)
+            }
+            
+            // Reverting to the simpler, single-direction "down and right" expansion trigger:
+            if (r >= size - EXPONSION_THRESHOLD || c >= size - EXPANSION_THRESHOLD) {
+                // Combined Expansion (Expands both R and C if hit near edge)
+                
+                // This is the simplest way to visually expand the grid without complex DOM insertions
+                // Note: This implementation only properly handles expanding rows at the bottom 
+                // and expects columns to be added correctly in the grid template, which is tricky.
+                
+                // Let's implement the simplest possible visual expansion: ONLY on the bottom edge
+                if (r >= size - EXPANSION_THRESHOLD) {
+                    const currentSize = state.gridSize;
+                    const newSize = currentSize + EXPANSION_AMOUNT;
+                    
+                    // 1. Generate new tiles (new rows only)
+                    const fragment = document.createDocumentFragment();
+                    for (let row = currentSize; row < newSize; row++) {
+                        for (let col = 0; col < currentSize; col++) {
+                            fragment.appendChild(createTile(row, col));
+                        }
+                    }
+                    mapEl.appendChild(fragment);
+                    
+                    // 2. Update state and dimensions
+                    state.gridSize = newSize;
+                    mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
+                    mapEl.style.height = `${newSize * TILE_SIZE}px`;
+                    
+                    console.log(`Map expanded to ${newSize}x${currentSize}`);
+                }
+            }
+        }
+
+
+        // --- EVENT HANDLERS ---
+
+        function handleTileClick(event) {
+            const tile = event.target;
+            if (!tile.classList.contains('tile')) return;
+
+            const r = parseInt(tile.dataset.r);
+            const c = parseInt(tile.dataset.c);
+
+            // Check if already built
+            if (tile.dataset.built) return;
+
+            // Place Building
+            const type = BUILDING_TYPES[state.currentTypeKey];
+            tile.classList.add(type.code);
+            tile.dataset.built = true; // Mark as built
+            
+            updateUI();
+
+            // Check if expansion is needed
+            checkAndExpandMap(r, c);
+        }
+
+        function handleKeyDown(event) {
+            const key = event.key;
+            if (key === '1' || key === '2' || key === '3') {
+                changeBuilding(key);
+            }
+        }
+
+        // --- INITIALIZATION ---
+
+        function init() {
+            // Setup DOM event listeners
+            mapEl.addEventListener('click', handleTileClick);
+            document.addEventListener('keydown', handleKeyDown);
+
+            // Initialize the map grid
+            setupInitialMap();
+
+            // Initial UI update
+            updateUI();
+        }
+
+        // Start the game
+        window.onload = init;
+    </script>
+</body>
+</html>
+
+--- END FILE: infinite-city-builder.html ---
+
+--- START FILE: infinite-parkour-platformer.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Parkour Platformer</title>
+    <style>
+        /* --- GLOBAL RESET & BASE STYLES --- */
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        /* --- GAME CONTAINER --- */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #87ceeb; /* Sky Blue */
+            overflow: hidden;
+        }
+
+        /* --- WORLD CONTAINER (Handles scrolling) --- */
+        #world {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 500000px; /* Effectively infinite width */
+            height: 100%;
+            will-change: transform; /* Performance optimization for translation */
+        }
+
+        /* --- PLAYER STYLES --- */
+        #player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #ff4500; /* Orange Red */
+            z-index: 100;
+        }
+
+        /* --- PLATFORM STYLES --- */
+        .platform {
+            position: absolute;
+            background-color: #008000; /* Green */
+            border-bottom: 5px solid #006400; /* Darker Green for depth */
+        }
+
+        /* --- UI ELEMENTS --- */
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: white;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 5px;
+            z-index: 200;
+        }
+
+        /* --- GAME OVER SCREEN --- */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            padding-top: 20vh;
+            z-index: 300;
+        }
+
+        #game-over-screen h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        #game-over-screen button {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        #game-over-screen button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="world">
+            <div id="player"></div>
+        </div>
+
+        <div id="game-over-screen">
+            <h1>Game Over</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button onclick="window.location.reload()">Restart Game</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS ---
+        const GRAVITY = 0.8;
+        const JUMP_VELOCITY = 18;
+        const RUN_SPEED = 6;
+        const PLATFORM_HEIGHT = 40;
+        const PLAYER_SCREEN_X = 200; // Player tries to stay anchored here on screen
+        const CAMERA_SMOOTHING = 0.1; // Smooth camera movement
+
+        // --- GAME STATE VARIABLES ---
+        let player;
+        let world;
+        let scoreDisplay;
+        let gameOverScreen;
+
+        let platforms = [];
+        let keys = {};
+
+        let playerX = 50;
+        let playerY = 0;
+        let playerVelY = 0;
+        let isGrounded = false;
+        let isGameOver = false;
+        let score = 0;
+
+        let lastPlatformX = 0;
+        let currentLevelHeight = window.innerHeight - PLATFORM_HEIGHT - 100;
+        let targetWorldX = 0; // The target position for the world translation
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            player = document.getElementById('player');
+            world = document.getElementById('world');
+            scoreDisplay = document.getElementById('score');
+            gameOverScreen = document.getElementById('game-over-screen');
+
+            // Set initial player Y position relative to screen bottom
+            playerY = currentLevelHeight - 30; // 30 is player height
+
+            // Create the initial starting platform
+            createPlatform(0, currentLevelHeight, 1500);
+
+            setupInput();
+            gameLoop();
+        };
+
+        // --- INPUT HANDLING ---
+        function setupInput() {
+            document.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                if (e.code === 'Space' && isGrounded && !isGameOver) {
+                    playerVelY = -JUMP_VELOCITY;
+                    isGrounded = false;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                keys[e.code] = false;
+            });
+        }
+
+        // --- LEVEL GENERATION ---
+        function createPlatform(x, y, width) {
+            const platformEl = document.createElement('div');
+            platformEl.className = 'platform';
+            platformEl.style.left = `${x}px`;
+            platformEl.style.top = `${y}px`;
+            platformEl.style.width = `${width}px`;
+            platformEl.style.height = `${PLATFORM_HEIGHT}px`;
+
+            world.appendChild(platformEl);
+            platforms.push({ x, y, width, height: PLATFORM_HEIGHT, el: platformEl });
+            lastPlatformX = x + width;
+        }
+
+        function generateNextPlatform() {
+            // Check if we need to generate more platforms (i.e., if the last platform is within 1000px of playerX)
+            if (lastPlatformX < playerX + window.innerWidth + 500) {
+                const minGap = 100;
+                const maxGap = 350;
+                const gap = Math.floor(Math.random() * (maxGap - minGap)) + minGap;
+
+                const minWidth = 150;
+                const maxWidth = 500;
+                const width = Math.floor(Math.random() * (maxWidth - minWidth)) + minWidth;
+
+                const newX = lastPlatformX + gap;
+
+                // Adjust height: -100 (up) to +50 (down)
+                const heightChange = Math.floor(Math.random() * 150) - 100;
+
+                let newY = currentLevelHeight + heightChange;
+
+                // Clamp Y position within screen bounds
+                const screenHeight = window.innerHeight;
+                newY = Math.max(screenHeight - PLATFORM_HEIGHT - 50, newY); // Don't go too low
+                newY = Math.min(screenHeight - PLATBLE_HEIGHT - 400, newY); // Don't go too high
+
+                currentLevelHeight = newY;
+                createPlatform(newX, newY, width);
+            }
+        }
+
+        // --- GAME LOGIC UPDATES ---
+        function updatePhysics() {
+            if (isGameOver) return;
+
+            // 1. Apply Gravity
+            playerVelY += GRAVITY;
+
+            // 2. Horizontal Movement
+            let moveX = 0;
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                moveX = RUN_SPEED;
+            } else if (keys['ArrowLeft'] || keys['KeyA']) {
+                moveX = -RUN_SPEED;
+            }
+            playerX += moveX;
+
+            // 3. Vertical Position Update
+            let newPlayerY = playerY + playerVelY;
+            isGrounded = false;
+
+            // 4. Collision Detection
+            platforms.forEach(p => {
+                // Simple AABB collision check
+                if (
+                    playerX < p.x + p.width &&          // Player right edge past platform left edge
+                    playerX + 30 > p.x &&               // Player left edge past platform right edge
+                    newPlayerY + 30 > p.y &&            // Player bottom past platform top
+                    newPlayerY < p.y + p.height         // Player top above platform bottom
+                ) {
+                    // Check if player is falling onto the platform (top collision)
+                    if (playerVelY > 0 && playerY + 30 <= p.y) {
+                        newPlayerY = p.y - 30; // Snap to the top
+                        playerVelY = 0;
+                        isGrounded = true;
+                    }
+                    // Prevent upward movement through platform (bottom collision)
+                    else if (playerVelY < 0 && playerY >= p.y + p.height) {
+                        playerVelY = 0; // Stop jump
+                        newPlayerY = p.y + p.height;
+                    }
+                }
+            });
+
+            playerY = newPlayerY;
+
+            // 5. Game Over Check (Falling off screen)
+            if (playerY > window.innerHeight) {
+                endGame();
+            }
+
+            // 6. Score Update
+            score = Math.floor(playerX / 10);
+            scoreDisplay.textContent = `Score: ${score}`;
+
+            // 7. Cleanup Old Platforms (Performance)
+            platforms = platforms.filter(p => {
+                if (p.x + p.width < playerX - window.innerWidth / 2) {
+                    p.el.remove();
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // --- RENDERING & CAMERA ---
+        function updateRender() {
+            // 1. Update Player position (Y is screen-fixed, X is relative to the world center)
+            player.style.transform = `translate(${PLAYER_SCREEN_X}px, ${playerY}px)`;
+
+            // 2. Calculate World Offset (Camera Follow)
+            // The camera should try to keep the player at PLAYER_SCREEN_X
+            let desiredWorldX = -(playerX - PLAYER_SCREEN_X);
+
+            // Smooth the camera movement
+            targetWorldX += (desiredWorldX - targetWorldX) * CAMERA_SMOOTHING;
+
+            // 3. Apply World Translation
+            world.style.transform = `translateX(${targetWorldX}px)`;
+        }
+
+        // --- GAME OVER ---
+        function endGame() {
+            if (isGameOver) return;
+            isGameOver = true;
+            cancelAnimationFrame(gameLoop);
+            document.getElementById('final-score').textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+
+        // --- MAIN GAME LOOP ---
+        function gameLoop() {
+            if (isGameOver) return;
+
+            updatePhysics();
+            generateNextPlatform();
+            updateRender();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+
+</body>
+</html>
+
+--- END FILE: infinite-parkour-platformer.html ---
+
+--- START FILE: infinite-space-survival.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Space Survival</title>
+    <style>
+        /* CORE SETUP */
+        body {
+            background-color: #000;
+            color: #fff;
+            margin: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            user-select: none;
+            cursor: none; /* Hide cursor for immersion */
+        }
+
+        .game-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            background-color: #000;
+        }
+
+        /* HUD STYLING */
+        #hud {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background: rgba(0, 0, 0, 0.5);
+            border: 1px solid #00ff00;
+            border-radius: 5px;
+            z-index: 100;
+            display: flex;
+            gap: 40px;
+            font-size: 1.2em;
+        }
+
+        /* PLAYER STYLING (Triangle Spaceship) */
+        #player {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 12px solid transparent;
+            border-right: 12px solid transparent;
+            border-bottom: 24px solid #00ffff; /* Cyan color */
+            transition: border-bottom 0.1s ease; /* For flashing when hit */
+            z-index: 50;
+        }
+
+        .hit-flash {
+            border-bottom: 24px solid #ff0000 !important; /* Red flash */
+        }
+
+        /* ASTEROID STYLING */
+        .asteroid {
+            position: absolute;
+            background-color: #555;
+            border-radius: 50%;
+            box-shadow: 0 0 10px rgba(255, 255, 255, 0.1);
+            z-index: 20;
+        }
+
+        /* GAME OVER SCREEN */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            z-index: 200;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+        }
+
+        #game-over-screen h1 {
+            color: #ff4444;
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        #game-over-screen p {
+            font-size: 1.5em;
+            margin: 10px 0;
+        }
+
+        #restart-button {
+            padding: 10px 20px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #00ff00;
+            color: #000;
+            border: none;
+            border-radius: 5px;
+            margin-top: 30px;
+            transition: background-color 0.2s;
+        }
+
+        #restart-button:hover {
+            background-color: #00cc00;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="game-container" id="game-container">
+        <!-- Heads Up Display -->
+        <div id="hud">
+            <div id="score-display">Time Survived: 0.0s</div>
+            <div id="hp-display">HP: 3</div>
+        </div>
+
+        <!-- Player Spaceship -->
+        <div id="player"></div>
+
+        <!-- Game Over Overlay -->
+        <div id="game-over-screen">
+            <h1>SYSTEM FAILURE</h1>
+            <p>You have been consumed by the void.</p>
+            <p id="final-score"></p>
+            <button id="restart-button" onclick="initGame()">Restart Mission</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS AND STATE ---
+        const GAME_SPEED = 60; // Target FPS for smoother interpolation
+        const PLAYER_SPEED = 5;
+        const ASTEROID_SPAWN_RATE = 1500; // milliseconds
+        const COLLISION_RADIUS_FACTOR = 0.8; // Fudge factor for collision
+
+        let gameState = 'ready'; // ready, running, gameover
+        let lastTime = 0;
+        let score = 0;
+        let asteroidTimer = 0;
+        let asteroids = [];
+        let keys = {};
+
+        const player = {
+            element: document.getElementById('player'),
+            x: window.innerWidth / 2,
+            y: window.innerHeight / 2,
+            width: 24, // Matches CSS border size
+            height: 24,
+            radius: 12,
+            hp: 3,
+            rotation: 0
+        };
+
+        // --- DOM REFERENCES ---
+        const gameContainer = document.getElementById('game-container');
+        const scoreDisplay = document.getElementById('score-display');
+        const hpDisplay = document.getElementById('hp-display');
+        const gameOverScreen = document.getElementById('game-over-screen');
+
+        // --- INPUT HANDLING ---
+        document.addEventListener('keydown', (e) => {
+            keys[e.key.toLowerCase()] = true;
+        });
+        document.addEventListener('keyup', (e) => {
+            keys[e.key.toLowerCase()] = false;
+        });
+
+        // --- GAME INITIALIZATION & LOOP CONTROL ---
+
+        function initGame() {
+            // Reset state
+            gameState = 'running';
+            player.hp = 3;
+            score = 0;
+            asteroids = [];
+            asteroidTimer = 0;
+            
+            // Clear existing asteroids from DOM
+            document.querySelectorAll('.asteroid').forEach(a => a.remove());
+
+            // Reset player position
+            player.x = window.innerWidth / 2;
+            player.y = window.innerHeight / 2;
+            
+            // Hide game over screen
+            gameOverScreen.style.display = 'none';
+            
+            updateHUD();
+            
+            // Start the main loop
+            if (gameState === 'running') {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        function gameLoop(currentTime) {
+            if (gameState !== 'running') return;
+
+            const deltaTime = currentTime - lastTime;
+            lastTime = currentTime;
+
+            // Update game logic based on elapsed time
+            updatePlayer(deltaTime);
+            updateAsteroids(deltaTime);
+            checkCollisions();
+            spawnAsteroid(deltaTime);
+            updateScore(deltaTime);
+            updateHUD();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        function gameOver() {
+            gameState = 'gameover';
+            gameOverScreen.style.display = 'flex';
+            document.getElementById('final-score').textContent = 
+                `Time survived: ${score.toFixed(2)} seconds.`;
+        }
+
+        // --- PLAYER LOGIC ---
+
+        function updatePlayer(deltaTime) {
+            let dx = 0;
+            let dy = 0;
+
+            if (keys['w'] || keys['arrowup']) dy -= PLAYER_SPEED;
+            if (keys['s'] || keys['arrowdown']) dy += PLAYER_SPEED;
+            if (keys['a'] || keys['arrowleft']) dx -= PLAYER_SPEED;
+            if (keys['d'] || keys['arrowright']) dx += PLAYER_SPEED;
+
+            // Normalize diagonal movement (Pythagorean theorem)
+            if (dx !== 0 && dy !== 0) {
+                const magnitude = Math.sqrt(dx * dx + dy * dy);
+                dx = (dx / magnitude) * PLAYER_SPEED;
+                dy = (dy / magnitude) * PLAYER_SPEED;
+            }
+
+            player.x += dx;
+            player.y += dy;
+
+            // Keep player within bounds
+            player.x = Math.max(player.width / 2, Math.min(window.innerWidth - player.width / 2, player.x));
+            player.y = Math.max(player.height / 2, Math.min(window.innerHeight - player.height / 2, player.y));
+            
+            // Calculate rotation based on movement direction (for a basic ship look)
+            if (dx !== 0 || dy !== 0) {
+                player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
+            }
+
+            // Apply transformation to the DOM element
+            player.element.style.transform = 
+                `translate(-50%, -50%) translate(${player.x}px, ${player.y}px) rotate(${player.rotation}deg)`;
+        }
+
+        function playerHit() {
+            if (gameState !== 'running') return;
+            
+            player.hp--;
+            
+            // Flash red on hit
+            player.element.classList.add('hit-flash');
+            setTimeout(() => {
+                player.element.classList.remove('hit-flash');
+            }, 100);
+
+            if (player.hp <= 0) {
+                gameOver();
+            }
+        }
+
+        // --- ASTEROID LOGIC ---
+
+        function createAsteroid() {
+            const size = 20 + Math.random() * 40; // 20px to 60px
+            const speed = 1 + Math.random() * 2; 
+
+            let startX, startY, vx, vy;
+
+            // Randomly choose an edge (0: Top, 1: Right, 2: Bottom, 3: Left)
+            const edge = Math.floor(Math.random() * 4);
+
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+
+            // Determine spawn coordinates (just outside the screen) and velocity vector
+            switch (edge) {
+                case 0: // Top
+                    startX = Math.random() * screenW;
+                    startY = -size;
+                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
+                    vy = speed;
+                    break;
+                case 1: // Right
+                    startX = screenW + size;
+                    startY = Math.random() * screenH;
+                    vx = -speed;
+                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
+                    break;
+                case 2: // Bottom
+                    startX = Math.random() * screenW;
+                    startY = screenH + size;
+                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
+                    vy = -speed;
+                    break;
+                case 3: // Left
+                    startX = -size;
+                    startY = Math.random() * screenH;
+                    vx = speed;
+                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
+                    break;
+            }
+
+            const asteroidElement = document.createElement('div');
+            asteroidElement.classList.add('asteroid');
+            asteroidElement.style.width = `${size}px`;
+            asteroidElement.style.height = `${size}px`;
+            gameContainer.appendChild(asteroidElement);
+
+            const newAsteroid = {
+                element: asteroidElement,
+                id: Date.now() + Math.random(),
+                x: startX,
+                y: startY,
+                radius: size / 2,
+                vx: vx,
+                vy: vy,
+                speed: speed
+            };
+            
+            asteroids.push(newAsteroid);
+        }
+
+        function spawnAsteroid(deltaTime) {
+            asteroidTimer += deltaTime;
+            if (asteroidTimer >= ASTEROID_SPAWN_RATE) {
+                createAsteroid();
+                asteroidTimer = 0;
+            }
+        }
+
+        function updateAsteroids(deltaTime) {
+            const toRemove = [];
+
+            for (let i = 0; i < asteroids.length; i++) {
+                const asteroid = asteroids[i];
+                
+                // Move asteroid
+                asteroid.x += asteroid.vx * deltaTime * 0.05;
+                asteroid.y += asteroid.vy * deltaTime * 0.05;
+
+                // Update DOM position
+                asteroid.element.style.left = `${asteroid.x - asteroid.radius}px`;
+                asteroid.element.style.top = `${asteroid.y - asteroid.radius}px`;
+
+                // Check if asteroid is outside bounds
+                if (asteroid.x < -asteroid.radius * 2 || 
+                    asteroid.x > window.innerWidth + asteroid.radius * 2 ||
+                    asteroid.y < -asteroid.radius * 2 || 
+                    asteroid.y > window.innerHeight + asteroid.radius * 2) {
+                    toRemove.push(i);
+                }
+            }
+            
+            // Remove off-screen asteroids (in reverse order to maintain index integrity)
+            for (let i = toRemove.length - 1; i >= 0; i--) {
+                const index = toRemove[i];
+                asteroids[index].element.remove();
+                asteroids.splice(index, 1);
+            }
+        }
+
+        // --- COLLISION DETECTION ---
+
+        function checkCollisions() {
+            // Player collision point (center of the bounding box)
+            const pCenterX = player.x;
+            const pCenterY = player.y;
+            const pRadius = player.radius * COLLISION_RADIUS_FACTOR;
+
+            for (let i = 0; i < asteroids.length; i++) {
+                const asteroid = asteroids[i];
+                const aRadius = asteroid.radius * COLLISION_RADIUS_FACTOR;
+
+                // Calculate distance between centers
+                const dx = pCenterX - asteroid.x;
+                const dy = pCenterY - asteroid.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Collision occurred
+                if (distance < pRadius + aRadius) {
+                    playerHit();
+
+                    // Remove the hit asteroid
+                    asteroid.element.remove();
+                    asteroids.splice(i, 1);
+                    i--; // Decrement index since we removed an element
+                }
+            }
+        }
+
+        // --- HUD AND SCORE ---
+
+        function updateScore(deltaTime) {
+            score += deltaTime / 1000;
+        }
+
+        function updateHUD() {
+            scoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
+            
+            let hpText = 'HP: ';
+            for (let i = 0; i < player.hp; i++) {
+                hpText += '❤️ ';
+            }
+            hpDisplay.textContent = hpText;
+        }
+
+        // --- INITIAL SETUP ---
+        window.onload = () => {
+            // Ensure player is centered initially (CSS handles the translation transformation)
+            player.element.style.left = '0px';
+            player.element.style.top = '0px'; 
+            
+            // Start the game immediately when the page loads
+            initGame();
+        };
+
+        // Handle window resizing to keep bounds correct (though player position might shift slightly)
+        window.addEventListener('resize', () => {
+            if (gameState === 'running') {
+                // Re-center player if necessary upon resize
+                player.x = Math.min(player.x, window.innerWidth - player.width / 2);
+                player.y = Math.min(player.y, window.innerHeight - player.height / 2);
+            }
+        });
+
+    </script>
+</body>
+</html>
+
+--- END FILE: infinite-space-survival.html ---
+
+--- START FILE: precision-aim-trainer.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precision Aim Trainer</title>
+    <style>
+        /* Base Reset and Setup */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: #1e1e2e;
+            color: #cdd6f4;
+            user-select: none;
+        }
+
+        /* HUD Styling */
+        #hud {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px;
+            font-size: 1.5em;
+            background-color: #313244;
+            border-bottom: 2px solid #585b70;
+            height: 5vh;
+            align-items: center;
+        }
+
+        /* Game Area Styling */
+        #game-area {
+            width: 98vw;
+            height: 90vh;
+            margin: 1vh auto 0;
+            background-color: #11111b;
+            position: relative;
+            overflow: hidden;
+            cursor: crosshair;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Target Styling */
+        #target {
+            position: absolute;
+            cursor: pointer;
+            background-color: #f38ba8; /* Pink/Red default */
+            border-radius: 50%;
+            transition: transform 100ms ease-out, background-color 0ms;
+            box-shadow: 0 0 10px rgba(243, 139, 148, 0.7);
+            display: none; /* Start hidden */
+            z-index: 10;
+        }
+
+        /* Visual Feedback Classes */
+        .target-hit {
+            background-color: #a6e3a1 !important; /* Green */
+            box-shadow: 0 0 15px #a6e3a1 !important;
+            transform: scale(1.1);
+        }
+
+        .target-miss {
+            background-color: #f9e2af !important; /* Yellow/Orange warning */
+            box-shadow: 0 0 15px #f9e2af !important;
+            transform: scale(0.9);
+        }
+
+        /* Overlay for Game Start/End */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(30, 30, 46, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 20;
+            transition: opacity 0.3s;
+        }
+
+        #overlay h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #89b4fa;
+        }
+        #overlay p {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            font-size: 1.5em;
+            margin-top: 30px;
+            cursor: pointer;
+            background-color: #b4befe;
+            color: #1e1e2e;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        #start-button:hover {
+            background-color: #cba6f7;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <span id="score-display">Score: 0</span>
+        <span id="lives-display">Lives: 3</span>
+    </div>
+
+    <div id="game-area">
+        <div id="target"></div>
+        <div id="overlay">
+            <h1>Precision Aim Trainer</h1>
+            <p id="overlay-text">Click the colored target as fast as possible to increase your score.</p>
+            <p>Difficulty continuously scales: Targets get smaller and disappear faster!</p>
+            <p>Miss or run out of time, and you lose a life. Lose 3 lives to end the game.</p>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Constants and State ---
+        const INITIAL_TARGET_SIZE = 60; // Pixels
+        const MIN_TARGET_SIZE = 15; // Hard minimum size
+        const INITIAL_VISIBILITY_TIME = 1500; // Milliseconds
+        const MIN_VISIBILITY_TIME = 300; // Hard minimum time
+
+        // Scaling Factors (Score-dependent difficulty)
+        const SIZE_DECREMENT_FACTOR = 0.985; // Target size = Initial * (Factor ^ Score)
+        const TIME_DECREMENT_FACTOR = 0.99; // Time = Initial * (Factor ^ Score)
+
+        let score = 0;
+        let lives = 3;
+        let gameActive = false;
+        let targetTimer;
+        let currentTargetTime = INITIAL_VISIBILITY_TIME;
+        let currentTargetSize = INITIAL_TARGET_SIZE;
+
+        // --- DOM Elements ---
+        const gameArea = document.getElementById('game-area');
+        const targetElement = document.getElementById('target');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const overlay = document.getElementById('overlay');
+        const overlayText = document.getElementById('overlay-text');
+        const startButton = document.getElementById('start-button');
+
+        // --- Utility Functions ---
+
+        function updateHUD() {
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+        }
+
+        function calculateDifficulty() {
+            // Calculate size
+            let newSize = INITIAL_TARGET_SIZE * Math.pow(SIZE_DECREMENT_FACTOR, score);
+            currentTargetSize = Math.max(newSize, MIN_TARGET_SIZE);
+
+            // Calculate time
+            let newTime = INITIAL_VISIBILITY_TIME * Math.pow(TIME_DECREMENT_FACTOR, score);
+            currentTargetTime = Math.max(newTime, MIN_VISIBILITY_TIME);
+        }
+
+        function flashFeedback(element, className) {
+            targetElement.classList.add(className);
+            setTimeout(() => {
+                targetElement.classList.remove(className);
+            }, 100);
+        }
+
+        // --- Game Flow Functions ---
+
+        function handleMiss() {
+            if (!gameActive) return;
+
+            clearTimeout(targetTimer);
+            lives--;
+            updateHUD();
+
+            flashFeedback(targetElement, 'target-miss');
+            targetElement.style.display = 'none';
+
+            if (lives <= 0) {
+                endGame();
+            } else {
+                // Wait briefly for feedback before generating the next target
+                setTimeout(newTarget, 100);
+            }
+        }
+
+        function handleHit(event) {
+            if (!gameActive) return;
+
+            // Ensure the click was exactly on the target element
+            if (event.target !== targetElement) {
+                // This shouldn't happen if the target listener is used, but good practice
+                return;
+            }
+
+            clearTimeout(targetTimer);
+            score++;
+            updateHUD();
+
+            flashFeedback(targetElement, 'target-hit');
+            targetElement.style.display = 'none';
+
+            // Wait briefly for feedback before generating the next target
+            setTimeout(newTarget, 100);
+        }
+
+        function newTarget() {
+            if (!gameActive) return;
+
+            // 1. Calculate new difficulty based on current score
+            calculateDifficulty();
+
+            // 2. Determine safe random position
+            const gameWidth = gameArea.clientWidth;
+            const gameHeight = gameArea.clientHeight;
+
+            // Ensure the target remains fully within the boundaries
+            const maxX = gameWidth - currentTargetSize;
+            const maxY = gameHeight - currentTargetSize;
+
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+
+            // 3. Apply styles and position
+            targetElement.style.width = `${currentTargetSize}px`;
+            targetElement.style.height = `${currentTargetSize}px`;
+            targetElement.style.left = `${randomX}px`;
+            targetElement.style.top = `${randomY}px`;
+            targetElement.style.display = 'block';
+
+            // 4. Set disappearance timer
+            targetTimer = setTimeout(() => {
+                // If timer runs out, it's a miss
+                handleMiss();
+            }, currentTargetTime);
+        }
+
+        function startGame() {
+            score = 0;
+            lives = 3;
+            gameActive = true;
+            updateHUD();
+            overlay.style.display = 'none';
+            
+            // Reset difficulty to initial state
+            currentTargetSize = INITIAL_TARGET_SIZE;
+            currentTargetTime = INITIAL_VISIBILITY_TIME;
+
+            newTarget();
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearTimeout(targetTimer);
+            targetElement.style.display = 'none';
+
+            overlayText.innerHTML = `Game Over! You scored <strong>${score}</strong> hits.<br>Try again to beat your record!`;
+            startButton.textContent = "Play Again";
+            overlay.style.display = 'flex';
+        }
+
+        // --- Event Listeners ---
+
+        // 1. Start Button Handler
+        startButton.addEventListener('click', startGame);
+
+        // 2. Target Hit Handler
+        targetElement.addEventListener('click', handleHit);
+
+        // 3. Game Area Miss Handler
+        // If the player clicks the game area but not the target, it's a miss.
+        gameArea.addEventListener('click', (event) => {
+            if (gameActive && event.target === gameArea) {
+                handleMiss();
+            }
+        });
+
+        // Initialize the HUD on load
+        document.addEventListener('DOMContentLoaded', updateHUD);
+    </script>
+
+</body>
+</html>
+
+--- END FILE: precision-aim-trainer.html ---
+
+--- START FILE: procedural-pipe-connect.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Pipe Connect Puzzle Generator</title>
+    <style>
+        :root {
+            --grid-size: 8;
+            --cell-size: 40px;
+            --pipe-color: #2c3e50;
+            --pipe-bg: #ecf0f1;
+            --start-color: #27ae60;
+            --end-color: #c0392b;
+            --path-color: #3498db;
+            --solved-path-color: #2ecc71;
+            --pipe-thickness: 8px;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #f4f7f6;
+            margin: 20px;
+        }
+
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+        }
+
+        #info-bar {
+            width: 100%;
+            max-width: calc(var(--grid-size) * var(--cell-size));
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: #fff;
+            border-radius: 5px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        #game-grid {
+            display: grid;
+            grid-template-columns: repeat(var(--grid-size), var(--cell-size));
+            grid-template-rows: repeat(var(--grid-size), var(--cell-size));
+            border: 4px solid #34495e;
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
+            transition: all 0.5s ease;
+        }
+
+        .cell {
+            width: var(--cell-size);
+            height: var(--cell-size);
+            box-sizing: border-box;
+            border: 1px solid #bdc3c7;
+            background-color: var(--pipe-bg);
+            position: relative;
+            cursor: pointer;
+            transition: transform 0.2s ease-out, background-color 0.5s;
+        }
+
+        /* Pipe Visualization using Pseudo-elements */
+        .pipe-visual {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Center Dot (Always present for pipes) */
+        .pipe-visual::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: var(--pipe-thickness);
+            height: var(--pipe-thickness);
+            background-color: var(--pipe-color);
+            transform: translate(-50%, -50%);
+            border-radius: 50%;
+            z-index: 2;
+        }
+
+        /* Pipe Segments - Use borders to simulate pipes */
+        .cell[data-type="1"] .pipe-visual { /* Straight */
+            border-left: var(--pipe-thickness) solid var(--pipe-color);
+            border-right: var(--pipe-thickness) solid var(--pipe-color);
+            transform: rotate(90deg); /* Base Vertical */
+        }
+        .cell[data-type="2"] .pipe-visual { /* Corner */
+            border-top: var(--pipe-thickness) solid var(--pipe-color);
+            border-right: var(--pipe-thickness) solid var(--pipe-color);
+        }
+        .cell[data-type="3"] .pipe-visual { /* T-Junction */
+            border-top: var(--pipe-thickness) solid var(--pipe-color);
+            border-right: var(--pipe-thickness) solid var(--pipe-color);
+            border-left: var(--pipe-thickness) solid var(--pipe-color);
+        }
+        .cell[data-type="4"] .pipe-visual { /* Cross */
+            border: var(--pipe-thickness) solid var(--pipe-color);
+        }
+
+        /* Pipe Rotation Handled by JS inline style */
+        .cell[data-rotation] .pipe-visual {
+            transform-origin: center center;
+        }
+
+        /* Start and End Markers */
+        .cell.start {
+            background-color: var(--start-color);
+            border-color: var(--start-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+        .cell.end {
+            background-color: var(--end-color);
+            border-color: var(--end-color);
+            color: white;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-weight: bold;
+        }
+
+        /* Solved State Feedback */
+        .cell.on-path .pipe-visual::before {
+            background-color: var(--solved-path-color);
+        }
+        .cell.on-path[data-type] .pipe-visual {
+            /* Change the pipe color itself for better feedback */
+            filter: hue-rotate(120deg) brightness(1.2); 
+            /* This is a cheat way to change pseudo-element color, 
+               but works well for visualization purposes */
+        }
+
+        .message {
+            margin-top: 20px;
+            font-size: 1.5em;
+            color: #2ecc71;
+            font-weight: bold;
+            display: none;
+            padding: 10px;
+            border-radius: 5px;
+            background-color: #e8f8f5;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>Pipe Connect Puzzle</h1>
+
+    <div id="info-bar">
+        <div>Score: <span id="score-display">0</span></div>
+        <div>Pipes Rotated: <span id="moves-display">0</span></div>
+        <div>Difficulty: <span id="difficulty-display">8x8</span></div>
+    </div>
+
+    <div id="game-grid">
+        <!-- Grid cells will be injected here by JavaScript -->
+    </div>
+
+    <div id="message" class="message">
+        Puzzle Solved! Generating next level...
+    </div>
+
+    <script>
+        // --- GLOBAL STATE ---
+        let GRID_SIZE = 8;
+        let score = 0;
+        let moves = 0;
+        let grid = [];
+        let startCell = { r: 0, c: 0 };
+        let endCell = { r: 0, c: 0 };
+        const GRID_CONTAINER = document.getElementById('game-grid');
+        
+        // Pipe Connections: [N, E, S, W] (True means open)
+        // Rotation is 90 degrees clockwise.
+        const PIPE_MAP = {
+            // 0: Empty/Blocker (Should not be used in main path, useful for padding/walls)
+            0: { id: 0, connections: [false, false, false, false], css: 'pipe-block' },
+            // 1: Straight (Vertical default)
+            1: { id: 1, connections: [true, false, true, false], css: 'pipe-straight' },
+            // 2: Corner (NE default)
+            2: { id: 2, connections: [true, true, false, false], css: 'pipe-corner' },
+            // 3: T-Junction (NES default)
+            3: { id: 3, connections: [true, true, true, false], css: 'pipe-t-junction' },
+            // 4: Cross
+            4: { id: 4, connections: [true, true, true, true], css: 'pipe-cross' }
+        };
+
+        const DIRS = [
+            { r: -1, c: 0, index: 0, opposite: 2 }, // North (index 0, connected by South 2)
+            { r: 0, c: 1, index: 1, opposite: 3 },  // East (index 1, connected by West 3)
+            { r: 1, c: 0, index: 2, opposite: 0 },  // South
+            { r: 0, c: -1, index: 3, opposite: 1 }   // West
+        ];
+
+        // --- UTILITY FUNCTIONS ---
+
+        /**
+         * Rotates the connection array clockwise by R steps (0, 1, 2, 3).
+         * R=1: [N, E, S, W] -> [W, N, E, S]
+         */
+        function rotateConnections(connections, rotation) {
+            if (rotation === 0) return connections;
+            
+            const rotated = [...connections];
+            const steps = rotation % 4;
+
+            for (let i = 0; i < steps; i++) {
+                // Rotate array elements: move last to front
+                const last = rotated.pop();
+                rotated.unshift(last);
+            }
+            return rotated;
+        }
+
+        /**
+         * Get the current effective connections for a cell based on its type and rotation.
+         */
+        function getCurrentConnections(cell) {
+            const baseConnections = PIPE_MAP[cell.type].connections;
+            return rotateConnections(baseConnections, cell.rotation);
+        }
+
+        function getRandomInt(max) {
+            return Math.floor(Math.random() * max);
+        }
+
+        function isInsideGrid(r, c) {
+            return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
+        }
+
+        // --- GENERATION LOGIC ---
+
+        function generatePuzzle() {
+            grid = [];
+            moves = 0;
+            
+            // 1. Initialize Grid
+            for (let r = 0; r < GRID_SIZE; r++) {
+                grid[r] = [];
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    grid[r][c] = {
+                        r, c,
+                        type: 0,
+                        rotation: 0,
+                        isPath: false, // For generation tracking
+                        initialPathRotation: 0 // Store rotation needed for solved path
+                    };
+                }
+            }
+
+            // 2. Define Start and End Points
+            // Start at a random edge
+            let currentR, currentC;
+            const edgeChoices = [
+                { r: 0, c: getRandomInt(GRID_SIZE), dir: 2 }, // Top edge, must start moving South
+                { r: GRID_SIZE - 1, c: getRandomInt(GRID_SIZE), dir: 0 }, // Bottom edge, must start moving North
+                { r: getRandomInt(GRID_SIZE), c: 0, dir: 1 }, // Left edge, must start moving East
+                { r: getRandomInt(GRID_SIZE), c: GRID_SIZE - 1, dir: 3 } // Right edge, must start moving West
+            ];
+            
+            const startEdge = edgeChoices[getRandomInt(4)];
+            currentR = startEdge.r;
+            currentC = startEdge.c;
+            
+            startCell = { r: currentR, c: currentC };
+            
+            let pathLength = 0;
+            let currentCell = grid[currentR][currentC];
+            currentCell.isPath = true;
+
+            const pathHistory = [{ r: currentR, c: currentC }];
+            const minPathLength = Math.floor(GRID_SIZE * 1.5);
+            
+            // 3. Generate the winding path using Randomized DFS
+            while (pathLength < GRID_SIZE * GRID_SIZE) {
+                const neighbors = DIRS.map((dir, index) => ({ dir, index }))
+                    .filter(({ dir }) => isInsideGrid(currentR + dir.r, currentC + dir.c))
+                    .filter(({ dir }) => !grid[currentR + dir.r][currentC + dir.c].isPath);
+                
+                if (neighbors.length === 0) {
+                    // Path dead-ends or fully explored. If path is long enough, this is the end.
+                    break; 
+                }
+
+                // Randomly pick a direction
+                const { dir: chosenDir, index: entryDirIndex } = neighbors[getRandomInt(neighbors.length)];
+
+                const nextR = currentR + chosenDir.r;
+                const nextC = currentC + chosenDir.c;
+                const nextCell = grid[nextR][nextC];
+
+                // Determine required pipe type for current cell
+                const prevCell = pathHistory[pathHistory.length - 1] || currentCell;
+                
+                // 4. Connect current cell to next cell
+                const exitDirIndex = entryDirIndex;
+                const requiredEntryIndex = chosenDir.opposite; // The direction the next pipe connects to current
+                
+                // Look up required connections based on neighbors (previous and next)
+                
+                // For the current cell, we need an exit connection at `exitDirIndex`
+                // AND an entry connection from the previous cell.
+                let prevDirIndex = -1;
+                if (pathHistory.length > 1) {
+                    const prevR = prevCell.r;
+                    const prevC = prevCell.c;
+                    
+                    // Find which direction index connects prev to current
+                    for(let i=0; i<4; i++) {
+                        if (prevR + DIRS[i].r === currentR && prevC + DIRS[i].c === currentC) {
+                            prevDirIndex = i;
+                            break;
+                        }
+                    }
+                }
+                
+                // Define the pipe segments required (based on current/next neighbor connections)
+                // This is a simplified approach, focusing only on the path we are building.
+                
+                let neededConnections = [];
+                if (pathHistory.length > 1) {
+                    neededConnections.push(prevDirIndex);
+                }
+                neededConnections.push(exitDirIndex);
+                
+                // Find the smallest pipe type that satisfies these connections
+                // (This is overly complex for single path generation, let's simplify pipe assignment)
+                
+                let pipeType;
+                let finalRotation = 0;
+                
+                if (pathHistory.length === 1) {
+                    // Start piece: Must be a Straight pipe leading out
+                    pipeType = 1; 
+                    finalRotation = (exitDirIndex % 2 === 0) ? 1 : 0; // 0 for H, 1 for V, but initial type is V (1)
+                    if (exitDirIndex === 1) finalRotation = 0; // Going East
+                    if (exitDirIndex === 3) finalRotation = 2; // Going West
+                    if (exitDirIndex === 0) finalRotation = 3; // Going North
+                    if (exitDirIndex === 2) finalRotation = 1; // Going South
+                    
+                } else {
+                    // Middle piece: Determine type based on turn
+                    const entryDir = DIRS.find(d => d.opposite === prevDirIndex);
+                    const exitDir = DIRS[exitDirIndex];
+
+                    const dirChange = (exitDirIndex - prevDirIndex + 4) % 4;
+                    
+                    if (dirChange === 0 || dirChange === 2) { 
+                        // Straight path (0 or 180 degree turn from entry)
+                        pipeType = 1;
+                        finalRotation = (prevDirIndex % 2 === 0) ? 1 : 0; // Vertical if connected N/S
+                    } else { 
+                        // Corner (90 or 270 degree turn)
+                        pipeType = 2;
+                        // Find required rotation to connect entry and exit
+                        // Example: Entry S (2), Exit E (1). Base corner is N(0), E(1). Need to rotate 3 times.
+                        // Base Corner (0,1,F,F) needs to align to (F,1,2,F) (meaning Entry must be 2, Exit must be 1)
+                        
+                        // We store the type and the solved rotation needed.
+                        let attempts = 0;
+                        while(attempts < 4) {
+                            const connections = rotateConnections(PIPE_MAP[2].connections, attempts);
+                            // Check if connections match the required entry/exit (using opposite index for entry)
+                            if (connections[prevDirIndex] && connections[exitDirIndex]) {
+                                finalRotation = attempts;
+                                break;
+                            }
+                            attempts++;
+                        }
+                        
+                        if (attempts === 4) {
+                             // This should not happen if logic is sound, but sometimes path forcing requires T-junctions
+                             pipeType = 3;
+                             attempts = 0;
+                             while(attempts < 4) {
+                                const connections = rotateConnections(PIPE_MAP[3].connections, attempts);
+                                if (connections[prevDirIndex] && connections[exitDirIndex]) {
+                                    finalRotation = attempts;
+                                    break;
+                                }
+                                attempts++;
+                            }
+                        }
+                    }
+                }
+                
+                currentCell.type = pipeType;
+                currentCell.initialPathRotation = finalRotation; // Store the SOLVED rotation
+                
+                currentCell = nextCell;
+                currentCell.isPath = true;
+                currentR = nextR;
+                currentC = nextC;
+                pathHistory.push({ r: currentR, c: currentC });
+                pathLength++;
+                
+                // If path is long enough, randomly decide if this is the end
+                if (pathLength >= minPathLength && Math.random() < 0.3) {
+                    break;
+                }
+            }
+            
+            // Set the final cell as the End point
+            endCell = { r: currentR, c: currentC };
+            
+            // Set types and rotations for Start and End points (must be straight pipe leading out/in)
+            if (pathHistory.length > 1) {
+                const firstPathPiece = grid[pathHistory[1].r][pathHistory[1].c];
+                const lastPathPiece = grid[pathHistory[pathHistory.length - 2].r][pathHistory[pathHistory.length - 2].c];
+                
+                // Start piece must be fixed
+                grid[startCell.r][startCell.c].type = 1;
+                grid[startCell.r][startCell.c].initialPathRotation = grid[startCell.r][startCell.c].initialPathRotation; // Already set above
+
+                // End piece (needs connection to prev piece)
+                grid[endCell.r][endCell.c].type = lastPathPiece.type === 4 ? 1 : 1; // Simplification: just make end a straight pipe connected back
+            }
+
+            // 5. Fill remaining cells (distractors)
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cell = grid[r][c];
+                    if (!cell.isPath) {
+                        // Assign random pipe type (1: Straight, 2: Corner, 3: T-Junction)
+                        cell.type = getRandomInt(3) + 1;
+                        cell.initialPathRotation = getRandomInt(4); // Solved rotation doesn't matter here
+                    }
+                    
+                    // 6. Scramble the puzzle: apply random rotation
+                    cell.rotation = getRandomInt(4);
+                }
+            }
+            
+            // Ensure Start and End pipes are marked correctly for rendering
+            grid[startCell.r][startCell.c].type = 0; // Use type 0 to denote special Start/End cell
+            grid[endCell.r][endCell.c].type = 0; // Use type 0
+
+            renderGrid();
+        }
+
+        // --- VALIDATION LOGIC (Path Tracing) ---
+
+        /**
+         * Checks if the puzzle is solved by performing a connectivity trace.
+         */
+        function checkWin() {
+            const visited = new Set();
+            const pathCells = [];
+            
+            const startR = startCell.r;
+            const startC = startCell.c;
+            
+            let currentR = startR;
+            let currentC = startC;
+            
+            // The Start cell must lead out! Find the required exit direction based on the first path piece.
+            let requiredExitDirIndex = -1;
+            
+            // Find the true first path piece neighbor
+            for(let i=0; i<DIRS.length; i++) {
+                const neighborR = startR + DIRS[i].r;
+                const neighborC = startC + DIRS[i].c;
+                if (isInsideGrid(neighborR, neighborC) && grid[neighborR][neighborC].isPath) {
+                    requiredExitDirIndex = i;
+                    break;
+                }
+            }
+            
+            if (requiredExitDirIndex === -1) return false; // Should not happen in a valid generated puzzle
+
+            // Start the trace from the required exit direction
+            let entryDirection = requiredExitDirIndex; // Direction *from* the neighbor *to* the start cell (0:N, 1:E, 2:S, 3:W)
+            let pathFound = false;
+
+            // Start BFS/DFS trace from the cell adjacent to Start
+            let traceR = startR + DIRS[requiredExitDirIndex].r;
+            let traceC = startC + DIRS[requiredExitDirIndex].c;
+            
+            // We need to trace from the first piece *to* the end.
+            const traceQueue = [{ r: traceR, c: traceC, entryDir: DIRS[requiredExitDirIndex].opposite }];
+            visited.add(`${traceR},${traceC}`);
+            pathCells.push(grid[traceR][traceC]);
+            
+            let successfulTrace = false;
+
+            while (traceQueue.length > 0) {
+                const { r, c, entryDir } = traceQueue.shift();
+                const cell = grid[r][c];
+
+                if (r === endCell.r && c === endCell.c) {
+                    // Check if the entry direction is successfully handled by the End pipe
+                    const connections = getCurrentConnections(cell);
+                    if (connections[entryDir]) {
+                        successfulTrace = true;
+                    }
+                    break; 
+                }
+                
+                const connections = getCurrentConnections(cell);
+
+                // 1. Check if the current pipe accepts entry from the required direction
+                if (!connections[entryDir]) {
+                    // Mismatch: Pipe rotated incorrectly
+                    break;
+                }
+
+                // 2. Find the exit direction (must be a connection that isn't the entry direction)
+                let exitDirIndex = -1;
+                for (let i = 0; i < 4; i++) {
+                    if (i !== entryDir && connections[i]) {
+                        exitDirIndex = i;
+                        break;
+                    }
+                }
+
+                if (exitDirIndex === -1) {
+                    // Dead end, path broken
+                    break;
+                }
+
+                const nextR = r + DIRS[exitDirIndex].r;
+                const nextC = c + DIRS[exitDirIndex].c;
+                
+                if (isInsideGrid(nextR, nextC)) {
+                    const nextCell = grid[nextR][nextC];
+                    const requiredEntryIndex = DIRS[exitDirIndex].opposite;
+
+                    // 3. Check if the next pipe accepts entry from the required direction
+                    const nextConnections = getCurrentConnections(nextCell);
+                    
+                    if (nextConnections[requiredEntryIndex]) {
+                        // Successful link
+                        if (!visited.has(`${nextR},${nextC}`)) {
+                            visited.add(`${nextR},${nextC}`);
+                            pathCells.push(nextCell);
+                            traceQueue.push({ r: nextR, c: nextC, entryDir: requiredEntryIndex });
+                        }
+                    } else {
+                        // Next pipe is rotated wrong
+                        break;
+                    }
+                } else {
+                    // Path goes off grid (error or open end)
+                    break;
+                }
+            }
+            
+            // 4. Update visualization
+            document.querySelectorAll('.cell').forEach(el => el.classList.remove('on-path'));
+
+            if (successfulTrace) {
+                score++;
+                document.getElementById('score-display').textContent = score;
+                document.getElementById('message').style.display = 'block';
+                
+                // Highlight solved path
+                pathCells.forEach(cell => {
+                    const el = document.getElementById(`cell-${cell.r}-${cell.c}`);
+                    if (el) el.classList.add('on-path');
+                });
+                
+                // Immediately generate the next level after a brief delay
+                setTimeout(() => {
+                    document.getElementById('message').style.display = 'none';
+                    increaseDifficulty();
+                    generatePuzzle();
+                }, 1000); 
+            }
+            
+            return successfulTrace;
+        }
+
+        // --- RENDER & INPUT ---
+
+        function handleCellClick(r, c) {
+            const cell = grid[r][c];
+            if (cell.r === startCell.r && cell.c === startCell.c) return;
+            if (cell.r === endCell.r && cell.c === endCell.c) return;
+            
+            cell.rotation = (cell.rotation + 1) % 4;
+            moves++;
+            document.getElementById('moves-display').textContent = moves;
+            
+            const element = document.getElementById(`cell-${r}-${c}`);
+            if (element) {
+                // Update rotation style instantly
+                const pipeVisual = element.querySelector('.pipe-visual');
+                pipeVisual.style.transform = `rotate(${cell.rotation * 90}deg)`;
+            }
+
+            checkWin();
+        }
+
+        function renderGrid() {
+            GRID_CONTAINER.innerHTML = '';
+            document.documentElement.style.setProperty('--grid-size', GRID_SIZE);
+            document.getElementById('difficulty-display').textContent = `${GRID_SIZE}x${GRID_SIZE}`;
+            
+            // Reset moves display for new level
+            document.getElementById('moves-display').textContent = 0;
+
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    const cellData = grid[r][c];
+                    const cellDiv = document.createElement('div');
+                    cellDiv.className = 'cell';
+                    cellDiv.id = `cell-${r}-${c}`;
+                    cellDiv.setAttribute('data-r', r);
+                    cellDiv.setAttribute('data-c', c);
+                    cellDiv.setAttribute('data-type', cellData.type);
+                    
+                    cellDiv.onclick = () => handleCellClick(r, c);
+
+                    const visualDiv = document.createElement('div');
+                    visualDiv.className = 'pipe-visual';
+                    visualDiv.style.transform = `rotate(${cellData.rotation * 90}deg)`;
+                    
+                    cellDiv.appendChild(visualDiv);
+
+                    if (r === startCell.r && c === startCell.c) {
+                        cellDiv.classList.add('start');
+                        cellDiv.textContent = 'S';
+                    } else if (r === endCell.r && c === endCell.c) {
+                        cellDiv.classList.add('end');
+                        cellDiv.textContent = 'E';
+                    }
+                    
+                    GRID_CONTAINER.appendChild(cellDiv);
+                }
+            }
+        }
+        
+        // --- DIFFICULTY PROGRESSION ---
+
+        function increaseDifficulty() {
+            if (score % 3 === 0 && score > 0) {
+                // Every 3 puzzles, increase size
+                GRID_SIZE = Math.min(GRID_SIZE + 1, 12); // Cap at 12x12
+            }
+            // Future extension: Introduce new pipe types or blockages based on score.
+        }
+
+        // --- INITIALIZATION ---
+
+        function initGame() {
+            // Set initial state
+            document.getElementById('score-display').textContent = score;
+            document.getElementById('moves-display').textContent = moves;
+            
+            generatePuzzle();
+        }
+
+        // Run the game!
+        initGame();
+    </script>
+</body>
+</html>
+
+--- END FILE: procedural-pipe-connect.html ---
+
+--- START FILE: reaction-time-challenge.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reaction Time Challenge</title>
+    
+    <style>
+        /* Base Reset and Styling */
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            background-color: #1a1a2e;
+            color: #fff;
+            cursor: pointer;
+        }
+
+        #game-area {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+
+        /* Target Square Styling */
+        #target {
+            width: 100px;
+            height: 100px;
+            background-color: #ff6a3c;
+            border-radius: 10px;
+            position: absolute;
+            opacity: 0;
+            cursor: pointer;
+            transition: opacity 0.1s; /* Smooth visual transition for showing/hiding */
+        }
+
+        /* Stats Panel */
+        #stats {
+            position: fixed;
+            top: 15px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 10px 20px;
+            background-color: rgba(0, 0, 0, 0.7);
+            border-radius: 8px;
+            z-index: 100;
+            display: flex;
+            gap: 30px;
+            font-size: 1.2em;
+            text-align: center;
+        }
+        .stat-item span {
+            display: block;
+            font-size: 0.8em;
+            color: #ccc;
+        }
+        
+        /* Message Overlay (Start/End Screen) */
+        #message-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.9);
+            z-index: 200;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            cursor: pointer;
+        }
+
+        #message-overlay h1 {
+            font-size: 3em;
+            color: #00bcd4;
+            margin-bottom: 10px;
+        }
+
+        #message-overlay p {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            background-color: #ff6a3c;
+            border: none;
+            border-radius: 5px;
+            font-size: 1.4em;
+            cursor: pointer;
+            color: #fff;
+            margin-top: 20px;
+        }
+
+        .failure {
+            background-color: #c70039 !important;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-area" onclick="backgroundClicked(event)">
+        
+        <div id="stats">
+            <div class="stat-item">
+                <strong id="score-display">0</strong>
+                <span>Score</span>
+            </div>
+            <div class="stat-item">
+                <strong id="time-limit-display">800 ms</strong>
+                <span>Limit</span>
+            </div>
+            <div class="stat-item">
+                <strong id="last-time-display">--</strong>
+                <span>Last Reaction</span>
+            </div>
+        </div>
+
+        <div id="target" onclick="targetClicked(event)"></div>
+
+        <div id="message-overlay">
+            <h1>Reaction Time Challenge</h1>
+            <p>Click the square as fast as you can. Be careful not to click the background!</p>
+            <p id="final-message">Click anywhere to start the game.</p>
+            <button id="start-button">Start Challenge</button>
+        </div>
+
+    </div>
+
+    <script>
+        // DOM Elements
+        const targetEl = document.getElementById('target');
+        const overlayEl = document.getElementById('message-overlay');
+        const scoreDisplayEl = document.getElementById('score-display');
+        const timeLimitDisplayEl = document.getElementById('time-limit-display');
+        const lastTimeDisplayEl = document.getElementById('last-time-display');
+        const finalMessageEl = document.getElementById('final-message');
+        const gameAreaEl = document.getElementById('game-area');
+
+        // Game State Variables
+        let score = 0;
+        let targetTimeLimit = 800; // Starting time limit in ms
+        const limitDecrement = 5; // How much the limit decreases per success
+        
+        let startTime = 0;
+        let gameRunning = false;
+        let targetVisible = false;
+        let timeoutHandle = null;
+
+        // Constants for Random Delays
+        const MIN_DELAY = 1000; // 1 second
+        const MAX_DELAY = 3000; // 3 seconds
+
+        /**
+         * Initializes and starts a new game session.
+         */
+        function startGame() {
+            if (gameRunning) return;
+            
+            gameRunning = true;
+            score = 0;
+            targetTimeLimit = 800;
+            targetVisible = false;
+            
+            // Clear visual state
+            gameAreaEl.classList.remove('failure');
+            targetEl.style.opacity = 0;
+            overlayEl.style.display = 'none';
+
+            updateDisplay();
+            setupNewRound();
+        }
+
+        /**
+         * Sets up the waiting phase before the target appears.
+         */
+        function setupNewRound() {
+            targetEl.style.opacity = 0;
+            targetVisible = false;
+            gameAreaEl.style.cursor = 'pointer'; // Reset cursor
+            
+            // Calculate random delay
+            const delay = Math.random() * (MAX_DELAY - MIN_DELAY) + MIN_DELAY;
+            
+            timeoutHandle = setTimeout(showTarget, delay);
+        }
+
+        /**
+         * Makes the target visible in a random location and starts the timer.
+         */
+        function showTarget() {
+            if (!gameRunning) return;
+
+            // 1. Set Random Position (Ensuring it stays within bounds)
+            const areaWidth = gameAreaEl.clientWidth;
+            const areaHeight = gameAreaEl.clientHeight;
+            const targetSize = 100; // 100px defined in CSS
+
+            const maxX = areaWidth - targetSize;
+            const maxY = areaHeight - targetSize;
+
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+
+            targetEl.style.left = `${randomX}px`;
+            targetEl.style.top = `${randomY}px`;
+            
+            // 2. Set Random Color (optional, but adds visual interest)
+            const randomColor = '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6, '0');
+            targetEl.style.backgroundColor = randomColor;
+
+            // 3. Display target and start timer
+            targetEl.style.opacity = 1;
+            gameAreaEl.style.cursor = 'default';
+            targetVisible = true;
+            startTime = performance.now();
+            
+            // 4. Set the failure timer (if the player misses the limit)
+            timeoutHandle = setTimeout(() => {
+                // If this timeout fires, the player was too slow
+                gameOver(true);
+            }, targetTimeLimit);
+        }
+
+        /**
+         * Handles the successful click on the target square.
+         * @param {Event} event - The click event (to prevent propagation)
+         */
+        function targetClicked(event) {
+            event.stopPropagation(); // Prevent background handler from firing
+
+            if (!gameRunning || !targetVisible) {
+                // If they click the space where the target WAS or if the game is paused
+                return; 
+            }
+
+            // Clear the existing slow-click timeout
+            clearTimeout(timeoutHandle);
+            
+            const reactionTime = performance.now() - startTime;
+
+            // Check if reaction time is within the limit
+            if (reactionTime > targetTimeLimit) {
+                lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms (TOO SLOW!)`;
+                gameOver(true); // Slow failure
+                return;
+            }
+
+            // SUCCESS!
+            score++;
+            targetTimeLimit = Math.max(50, targetTimeLimit - limitDecrement); // Limit cannot go below 50ms
+
+            // Update display and proceed
+            lastTimeDisplayEl.textContent = `${Math.round(reactionTime)} ms`;
+            updateDisplay();
+            setupNewRound();
+        }
+
+        /**
+         * Handles the click on the background/game area.
+         * @param {Event} event - The click event
+         */
+        function backgroundClicked(event) {
+            // Check if the click originated on the main game area and not a stat element or the target itself
+            if (event.target.id !== 'game-area') {
+                return; 
+            }
+            
+            if (gameRunning) {
+                if (!targetVisible) {
+                    // Clicking while waiting for the target to appear is an immediate fail
+                    gameOver(false); 
+                } else {
+                    // Clicking the background while the target is visible is also a fail
+                    gameOver(false);
+                }
+            } else {
+                // If the game is not running, click starts the game (handled by overlay listener)
+            }
+        }
+
+        /**
+         * Ends the game and displays the final score.
+         * @param {boolean} wasSlow - True if failure was due to slowness, False if due to clicking background.
+         */
+        function gameOver(wasSlow) {
+            if (!gameRunning) return;
+
+            gameRunning = false;
+            targetVisible = false;
+            clearTimeout(timeoutHandle);
+            
+            targetEl.style.opacity = 0;
+            gameAreaEl.style.cursor = 'default';
+            
+            // Visual feedback for failure
+            gameAreaEl.classList.add('failure');
+
+            overlayEl.style.display = 'flex';
+            
+            let reasonText = wasSlow 
+                ? "You missed the time limit." 
+                : "You clicked the background too early!";
+                
+            finalMessageEl.innerHTML = `
+                <p>Game Over! ${reasonText}</p>
+                <h2>Final Score: ${score}</h2>
+                <p>Click START CHALLENGE to try again.</p>
+            `;
+            
+            document.getElementById('start-button').textContent = "Start Challenge";
+            
+            // Allow clicking anywhere on overlay to restart
+            overlayEl.onclick = startGame; 
+        }
+
+        /**
+         * Updates the score and time limit display elements.
+         */
+        function updateDisplay() {
+            scoreDisplayEl.textContent = score;
+            timeLimitDisplayEl.textContent = `${targetTimeLimit} ms`;
+        }
+
+        // Initialize: Ensure the overlay handles the first click to start
+        document.addEventListener('DOMContentLoaded', () => {
+             gameOver(false); // Set initial state
+             finalMessageEl.innerHTML = `
+                <p>Click the square as fast as you can. Be careful not to click the background!</p>
+                <p>The time limit starts at 800ms and decreases by ${limitDecrement}ms every round.</p>
+                <p>Click START CHALLENGE to begin.</p>
+            `;
+            document.getElementById('start-button').textContent = "Start Challenge";
+        });
+
+    </script>
+</body>
+</html>
+
+--- END FILE: reaction-time-challenge.html ---
+
+--- START FILE: snake-game.html ---
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Snake Game</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            background-color: #222;
+            font-family: 'Arial', sans-serif;
+            color: #fff;
+        }
+
+        #game-container {
+            border: 5px solid #00f;
+            box-shadow: 0 0 20px rgba(0, 0, 255, 0.7);
+            background-color: #000;
+        }
+
+        #info-panel {
+            width: 400px; /* Match canvas width */
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+            padding: 10px 0;
+            font-size: 1.2em;
+        }
+        
+        #game-over-screen {
+            position: absolute;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            width: 400px;
+            height: 400px;
+            background-color: rgba(0, 0, 0, 0.9);
+            border: 5px solid red;
+            z-index: 10;
+        }
+
+        #game-over-screen h1 {
+            color: red;
+            margin-bottom: 10px;
+        }
+        #game-over-screen p {
+            font-size: 1.5em;
+            margin-bottom: 20px;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 1.1em;
+            cursor: pointer;
+            background-color: #00f;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        button:hover {
+            background-color: #00a;
+        }
+
+        #controls {
+            margin-top: 15px;
+            color: #aaa;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>The Infinite Snake</h1>
+    
+    <div id="info-panel">
+        <div>Score: <span id="score">0</span></div>
+        <div>Level (Speed): <span id="speed">1</span></div>
+    </div>
+
+    <div id="game-container">
+        <div id="game-over-screen">
+            <h1>GAME OVER!</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button onclick="startGame()">Restart Game</button>
+        </div>
+        <canvas id="game-board" width="400" height="400"></canvas>
+    </div>
+
+    <div id="controls">
+        Use Arrow Keys or WASD to move.
+    </div>
+
+    <script>
+        // --- Configuration ---
+        const CANVAS_SIZE = 400;
+        const GRID_SIZE = 20; // 20x20 grid
+        const CELL_SIZE = CANVAS_SIZE / GRID_SIZE; // 20px per cell
+        const INITIAL_SPEED_MS = 150; // Slower start
+        const SPEED_INCREASE_INTERVAL = 20; // Increase speed every 20 points
+        const SPEED_DECREMENT = 10; // Decrease interval by 10ms per level
+
+        // --- Game State Variables ---
+        let canvas, ctx;
+        let snake;
+        let food;
+        let dx, dy; // Direction vector
+        let score;
+        let gameLoopInterval;
+        let currentSpeed;
+        let isMoving; // Prevent immediate reverse direction
+        let gameRunning = false;
+
+        // --- DOM Elements ---
+        const scoreDisplay = document.getElementById('score');
+        const speedDisplay = document.getElementById('speed');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const finalScoreDisplay = document.getElementById('final-score');
+
+        // --- Initialization ---
+
+        window.onload = function() {
+            canvas = document.getElementById('game-board');
+            ctx = canvas.getContext('2d');
+            
+            // Wait for user input to start the first game
+            gameOverScreen.style.display = 'flex';
+            document.getElementById('final-score').innerText = 'N/A';
+            document.querySelector('#game-over-screen h1').innerText = 'SNAKE GAME';
+            document.querySelector('#game-over-screen p').innerText = 'Press Start to Play';
+            document.querySelector('#game-over-screen button').innerText = 'Start Game';
+        };
+
+        function startGame() {
+            if (gameRunning) return;
+            
+            // Reset state
+            snake = [{x: 10, y: 10}, {x: 9, y: 10}]; // Start with 2 segments
+            dx = 1; // Moving right
+            dy = 0;
+            score = 0;
+            currentSpeed = INITIAL_SPEED_MS;
+            isMoving = true;
+            gameRunning = true;
+
+            scoreDisplay.innerText = score;
+            speedDisplay.innerText = 1;
+            gameOverScreen.style.display = 'none';
+
+            spawnFood();
+            
+            // Start the main loop
+            startLoop();
+
+            // Set up keyboard listeners once
+            document.removeEventListener('keydown', changeDirection); 
+            document.addEventListener('keydown', changeDirection);
+        }
+
+        function startLoop() {
+            clearInterval(gameLoopInterval); // Clear any existing loop
+            gameLoopInterval = setInterval(gameLoop, currentSpeed);
+        }
+
+        // --- Core Drawing and Movement ---
+
+        function drawGrid() {
+            ctx.strokeStyle = '#020210'; // Dark blue grid lines
+            ctx.lineWidth = 0.5;
+            for (let i = 0; i <= GRID_SIZE; i++) {
+                // Vertical lines
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, CANVAS_SIZE);
+                ctx.stroke();
+
+                // Horizontal lines
+                ctx.beginPath();
+                ctx.moveTo(0, i * CELL_SIZE);
+                ctx.lineTo(CANVAS_SIZE, i * CELL_SIZE);
+                ctx.stroke();
+            }
+        }
+
+        function draw() {
+            // Clear the board
+            ctx.fillStyle = '#000';
+            ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+            
+            drawGrid();
+
+            // Draw Food
+            ctx.fillStyle = 'red';
+            ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+
+            // Draw Snake
+            snake.forEach((segment, index) => {
+                ctx.fillStyle = index === 0 ? '#0F0' : '#090'; // Head is brighter green
+                ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+                
+                // Add border/style for defined segments
+                ctx.strokeStyle = '#000';
+                ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            });
+        }
+
+        function moveSnake() {
+            if (!isMoving) return; // Wait for the next loop tick
+
+            // 1. Calculate new head position
+            const newHead = {
+                x: snake[0].x + dx,
+                y: snake[0].y + dy
+            };
+
+            // 2. Check for Game Over conditions
+            if (
+                newHead.x < 0 || 
+                newHead.x >= GRID_SIZE || 
+                newHead.y < 0 || 
+                newHead.y >= GRID_SIZE ||
+                checkSelfCollision(newHead)
+            ) {
+                gameOver();
+                return;
+            }
+
+            // 3. Move the snake: Add new head
+            snake.unshift(newHead);
+
+            // 4. Check for food consumption
+            if (newHead.x === food.x && newHead.y === food.y) {
+                score++;
+                scoreDisplay.innerText = score;
+                spawnFood();
+
+                // Check for speed increase (Infinite Concept)
+                if (score > 0 && score % SPEED_INCREASE_INTERVAL === 0) {
+                    // Decrease interval time (increase speed)
+                    currentSpeed = Math.max(50, currentSpeed - SPEED_DECREMENT);
+                    
+                    // Display level (1 is base speed, +1 for every speed increase)
+                    const level = 1 + Math.floor(score / SPEED_INCREASE_INTERVAL);
+                    speedDisplay.innerText = level;
+                    
+                    // Restart the loop with the new speed
+                    startLoop();
+                }
+            } else {
+                // Remove the tail if no food was eaten
+                snake.pop();
+            }
+            
+            isMoving = true; // Allow new input on the next tick
+        }
+
+        function gameLoop() {
+            moveSnake();
+            draw();
+        }
+
+        // --- Helper Functions ---
+
+        function getRandomCoordinate() {
+            return Math.floor(Math.random() * GRID_SIZE);
+        }
+
+        function spawnFood() {
+            let newFood;
+            let onSnake;
+            
+            do {
+                newFood = { x: getRandomCoordinate(), y: getRandomCoordinate() };
+                onSnake = snake.some(segment => segment.x === newFood.x && segment.y === newFood.y);
+            } while (onSnake);
+            
+            food = newFood;
+        }
+
+        function checkSelfCollision(head) {
+            // Start checking from the second segment (index 1)
+            for (let i = 1; i < snake.length; i++) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        function changeDirection(event) {
+            if (!gameRunning || !isMoving) return;
+
+            const keyPressed = event.key;
+            
+            const goingUp = dy === -1;
+            const goingDown = dy === 1;
+            const goingLeft = dx === -1;
+            const goingRight = dx === 1;
+
+            let newDx = dx;
+            let newDy = dy;
+
+            // Use WASD or Arrow Keys
+            if ((keyPressed === 'ArrowLeft' || keyPressed === 'a') && !goingRight) {
+                newDx = -1; newDy = 0;
+            } else if ((keyPressed === 'ArrowRight' || keyPressed === 'd') && !goingLeft) {
+                newDx = 1; newDy = 0;
+            } else if ((keyPressed === 'ArrowUp' || keyPressed === 'w') && !goingDown) {
+                newDx = 0; newDy = -1;
+            } else if ((keyPressed === 'ArrowDown' || keyPressed === 's') && !goingUp) {
+                newDx = 0; newDy = 1;
+            }
+
+            // Only update direction if it changed
+            if (newDx !== dx || newDy !== dy) {
+                dx = newDx;
+                dy = newDy;
+                isMoving = false; // Block further changes until the next move tick
+            }
+        }
+
+        function gameOver() {
+            gameRunning = false;
+            clearInterval(gameLoopInterval);
+            
+            finalScoreDisplay.innerText = score;
+            document.querySelector('#game-over-screen h1').innerText = 'GAME OVER!';
+            document.querySelector('#game-over-screen p').innerText = `Final Score: ${score}`;
+            document.querySelector('#game-over-screen button').innerText = 'Play Again';
+            gameOverScreen.style.display = 'flex';
+        }
+
+    </script>
+</body>
+</html>
+
+--- END FILE: snake-game.html ---
+
+---------------------------------------------------------------------------------
+
+I have 10 separate HTML files, where each of them are a full-fledged game. So, what I want you to do is create a homepage where all of those games will be connected. And linked, so that when clicked, they can lead them to there. And I don't want to redefine them, so make a homepage, and that's it.

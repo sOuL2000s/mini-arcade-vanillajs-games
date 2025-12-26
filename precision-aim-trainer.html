@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Precision Aim Trainer</title>
+    <style>
+        /* Base Reset and Setup */
+        body, html {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            overflow: hidden;
+            font-family: 'Arial', sans-serif;
+            background-color: #1e1e2e;
+            color: #cdd6f4;
+            user-select: none;
+        }
+
+        /* HUD Styling */
+        #hud {
+            display: flex;
+            justify-content: space-around;
+            padding: 15px;
+            font-size: 1.5em;
+            background-color: #313244;
+            border-bottom: 2px solid #585b70;
+            height: 5vh;
+            align-items: center;
+        }
+
+        /* Game Area Styling */
+        #game-area {
+            width: 98vw;
+            height: 90vh;
+            margin: 1vh auto 0;
+            background-color: #11111b;
+            position: relative;
+            overflow: hidden;
+            cursor: crosshair;
+            border-radius: 8px;
+            box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Target Styling */
+        #target {
+            position: absolute;
+            cursor: pointer;
+            background-color: #f38ba8; /* Pink/Red default */
+            border-radius: 50%;
+            transition: transform 100ms ease-out, background-color 0ms;
+            box-shadow: 0 0 10px rgba(243, 139, 148, 0.7);
+            display: none; /* Start hidden */
+            z-index: 10;
+        }
+
+        /* Visual Feedback Classes */
+        .target-hit {
+            background-color: #a6e3a1 !important; /* Green */
+            box-shadow: 0 0 15px #a6e3a1 !important;
+            transform: scale(1.1);
+        }
+
+        .target-miss {
+            background-color: #f9e2af !important; /* Yellow/Orange warning */
+            box-shadow: 0 0 15px #f9e2af !important;
+            transform: scale(0.9);
+        }
+
+        /* Overlay for Game Start/End */
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(30, 30, 46, 0.95);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 20;
+            transition: opacity 0.3s;
+        }
+
+        #overlay h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+            color: #89b4fa;
+        }
+        #overlay p {
+            font-size: 1.2em;
+            margin: 10px 0;
+        }
+
+        #start-button {
+            padding: 15px 30px;
+            font-size: 1.5em;
+            margin-top: 30px;
+            cursor: pointer;
+            background-color: #b4befe;
+            color: #1e1e2e;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.2s;
+        }
+
+        #start-button:hover {
+            background-color: #cba6f7;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="hud">
+        <span id="score-display">Score: 0</span>
+        <span id="lives-display">Lives: 3</span>
+    </div>
+
+    <div id="game-area">
+        <div id="target"></div>
+        <div id="overlay">
+            <h1>Precision Aim Trainer</h1>
+            <p id="overlay-text">Click the colored target as fast as possible to increase your score.</p>
+            <p>Difficulty continuously scales: Targets get smaller and disappear faster!</p>
+            <p>Miss or run out of time, and you lose a life. Lose 3 lives to end the game.</p>
+            <button id="start-button">Start Game</button>
+        </div>
+    </div>
+
+    <script>
+        // --- Game Constants and State ---
+        const INITIAL_TARGET_SIZE = 60; // Pixels
+        const MIN_TARGET_SIZE = 15; // Hard minimum size
+        const INITIAL_VISIBILITY_TIME = 1500; // Milliseconds
+        const MIN_VISIBILITY_TIME = 300; // Hard minimum time
+
+        // Scaling Factors (Score-dependent difficulty)
+        const SIZE_DECREMENT_FACTOR = 0.985; // Target size = Initial * (Factor ^ Score)
+        const TIME_DECREMENT_FACTOR = 0.99; // Time = Initial * (Factor ^ Score)
+
+        let score = 0;
+        let lives = 3;
+        let gameActive = false;
+        let targetTimer;
+        let currentTargetTime = INITIAL_VISIBILITY_TIME;
+        let currentTargetSize = INITIAL_TARGET_SIZE;
+
+        // --- DOM Elements ---
+        const gameArea = document.getElementById('game-area');
+        const targetElement = document.getElementById('target');
+        const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display');
+        const overlay = document.getElementById('overlay');
+        const overlayText = document.getElementById('overlay-text');
+        const startButton = document.getElementById('start-button');
+
+        // --- Utility Functions ---
+
+        function updateHUD() {
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
+        }
+
+        function calculateDifficulty() {
+            // Calculate size
+            let newSize = INITIAL_TARGET_SIZE * Math.pow(SIZE_DECREMENT_FACTOR, score);
+            currentTargetSize = Math.max(newSize, MIN_TARGET_SIZE);
+
+            // Calculate time
+            let newTime = INITIAL_VISIBILITY_TIME * Math.pow(TIME_DECREMENT_FACTOR, score);
+            currentTargetTime = Math.max(newTime, MIN_VISIBILITY_TIME);
+        }
+
+        function flashFeedback(element, className) {
+            targetElement.classList.add(className);
+            setTimeout(() => {
+                targetElement.classList.remove(className);
+            }, 100);
+        }
+
+        // --- Game Flow Functions ---
+
+        function handleMiss() {
+            if (!gameActive) return;
+
+            clearTimeout(targetTimer);
+            lives--;
+            updateHUD();
+
+            flashFeedback(targetElement, 'target-miss');
+            targetElement.style.display = 'none';
+
+            if (lives <= 0) {
+                endGame();
+            } else {
+                // Wait briefly for feedback before generating the next target
+                setTimeout(newTarget, 100);
+            }
+        }
+
+        function handleHit(event) {
+            if (!gameActive) return;
+
+            // Ensure the click was exactly on the target element
+            if (event.target !== targetElement) {
+                // This shouldn't happen if the target listener is used, but good practice
+                return;
+            }
+
+            clearTimeout(targetTimer);
+            score++;
+            updateHUD();
+
+            flashFeedback(targetElement, 'target-hit');
+            targetElement.style.display = 'none';
+
+            // Wait briefly for feedback before generating the next target
+            setTimeout(newTarget, 100);
+        }
+
+        function newTarget() {
+            if (!gameActive) return;
+
+            // 1. Calculate new difficulty based on current score
+            calculateDifficulty();
+
+            // 2. Determine safe random position
+            const gameWidth = gameArea.clientWidth;
+            const gameHeight = gameArea.clientHeight;
+
+            // Ensure the target remains fully within the boundaries
+            const maxX = gameWidth - currentTargetSize;
+            const maxY = gameHeight - currentTargetSize;
+
+            const randomX = Math.floor(Math.random() * maxX);
+            const randomY = Math.floor(Math.random() * maxY);
+
+            // 3. Apply styles and position
+            targetElement.style.width = `${currentTargetSize}px`;
+            targetElement.style.height = `${currentTargetSize}px`;
+            targetElement.style.left = `${randomX}px`;
+            targetElement.style.top = `${randomY}px`;
+            targetElement.style.display = 'block';
+
+            // 4. Set disappearance timer
+            targetTimer = setTimeout(() => {
+                // If timer runs out, it's a miss
+                handleMiss();
+            }, currentTargetTime);
+        }
+
+        function startGame() {
+            score = 0;
+            lives = 3;
+            gameActive = true;
+            updateHUD();
+            overlay.style.display = 'none';
+            
+            // Reset difficulty to initial state
+            currentTargetSize = INITIAL_TARGET_SIZE;
+            currentTargetTime = INITIAL_VISIBILITY_TIME;
+
+            newTarget();
+        }
+
+        function endGame() {
+            gameActive = false;
+            clearTimeout(targetTimer);
+            targetElement.style.display = 'none';
+
+            overlayText.innerHTML = `Game Over! You scored <strong>${score}</strong> hits.<br>Try again to beat your record!`;
+            startButton.textContent = "Play Again";
+            overlay.style.display = 'flex';
+        }
+
+        // --- Event Listeners ---
+
+        // 1. Start Button Handler
+        startButton.addEventListener('click', startGame);
+
+        // 2. Target Hit Handler
+        targetElement.addEventListener('click', handleHit);
+
+        // 3. Game Area Miss Handler
+        // If the player clicks the game area but not the target, it's a miss.
+        gameArea.addEventListener('click', (event) => {
+            if (gameActive && event.target === gameArea) {
+                handleMiss();
+            }
+        });
+
+        // Initialize the HUD on load
+        document.addEventListener('DOMContentLoaded', updateHUD);
+    </script>
+
+</body>
+</html>

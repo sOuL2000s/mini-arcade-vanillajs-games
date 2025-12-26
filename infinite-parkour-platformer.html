@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Infinite Parkour Platformer</title>
+    <style>
+        /* --- GLOBAL RESET & BASE STYLES --- */
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+            font-family: sans-serif;
+        }
+
+        /* --- GAME CONTAINER --- */
+        #game-container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            background-color: #87ceeb; /* Sky Blue */
+            overflow: hidden;
+        }
+
+        /* --- WORLD CONTAINER (Handles scrolling) --- */
+        #world {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 500000px; /* Effectively infinite width */
+            height: 100%;
+            will-change: transform; /* Performance optimization for translation */
+        }
+
+        /* --- PLAYER STYLES --- */
+        #player {
+            position: absolute;
+            width: 30px;
+            height: 30px;
+            background-color: #ff4500; /* Orange Red */
+            z-index: 100;
+        }
+
+        /* --- PLATFORM STYLES --- */
+        .platform {
+            position: absolute;
+            background-color: #008000; /* Green */
+            border-bottom: 5px solid #006400; /* Darker Green for depth */
+        }
+
+        /* --- UI ELEMENTS --- */
+        #score {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 24px;
+            color: white;
+            padding: 5px 10px;
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 5px;
+            z-index: 200;
+        }
+
+        /* --- GAME OVER SCREEN --- */
+        #game-over-screen {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            text-align: center;
+            padding-top: 20vh;
+            z-index: 300;
+        }
+
+        #game-over-screen h1 {
+            font-size: 3em;
+            margin-bottom: 20px;
+        }
+
+        #game-over-screen button {
+            padding: 15px 30px;
+            font-size: 1.2em;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin-top: 20px;
+            transition: background-color 0.3s;
+        }
+        #game-over-screen button:hover {
+            background-color: #45a049;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <div id="score">Score: 0</div>
+        <div id="world">
+            <div id="player"></div>
+        </div>
+
+        <div id="game-over-screen">
+            <h1>Game Over</h1>
+            <p>Final Score: <span id="final-score">0</span></p>
+            <button onclick="window.location.reload()">Restart Game</button>
+        </div>
+    </div>
+
+    <script>
+        // --- GAME CONSTANTS ---
+        const GRAVITY = 0.8;
+        const JUMP_VELOCITY = 18;
+        const RUN_SPEED = 6;
+        const PLATFORM_HEIGHT = 40;
+        const PLAYER_SCREEN_X = 200; // Player tries to stay anchored here on screen
+        const CAMERA_SMOOTHING = 0.1; // Smooth camera movement
+
+        // --- GAME STATE VARIABLES ---
+        let player;
+        let world;
+        let scoreDisplay;
+        let gameOverScreen;
+
+        let platforms = [];
+        let keys = {};
+
+        let playerX = 50;
+        let playerY = 0;
+        let playerVelY = 0;
+        let isGrounded = false;
+        let isGameOver = false;
+        let score = 0;
+
+        let lastPlatformX = 0;
+        let currentLevelHeight = window.innerHeight - PLATFORM_HEIGHT - 100;
+        let targetWorldX = 0; // The target position for the world translation
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            player = document.getElementById('player');
+            world = document.getElementById('world');
+            scoreDisplay = document.getElementById('score');
+            gameOverScreen = document.getElementById('game-over-screen');
+
+            // Set initial player Y position relative to screen bottom
+            playerY = currentLevelHeight - 30; // 30 is player height
+
+            // Create the initial starting platform
+            createPlatform(0, currentLevelHeight, 1500);
+
+            setupInput();
+            gameLoop();
+        };
+
+        // --- INPUT HANDLING ---
+        function setupInput() {
+            document.addEventListener('keydown', (e) => {
+                keys[e.code] = true;
+                if (e.code === 'Space' && isGrounded && !isGameOver) {
+                    playerVelY = -JUMP_VELOCITY;
+                    isGrounded = false;
+                }
+            });
+            document.addEventListener('keyup', (e) => {
+                keys[e.code] = false;
+            });
+        }
+
+        // --- LEVEL GENERATION ---
+        function createPlatform(x, y, width) {
+            const platformEl = document.createElement('div');
+            platformEl.className = 'platform';
+            platformEl.style.left = `${x}px`;
+            platformEl.style.top = `${y}px`;
+            platformEl.style.width = `${width}px`;
+            platformEl.style.height = `${PLATFORM_HEIGHT}px`;
+
+            world.appendChild(platformEl);
+            platforms.push({ x, y, width, height: PLATFORM_HEIGHT, el: platformEl });
+            lastPlatformX = x + width;
+        }
+
+        function generateNextPlatform() {
+            // Check if we need to generate more platforms (i.e., if the last platform is within 1000px of playerX)
+            if (lastPlatformX < playerX + window.innerWidth + 500) {
+                const minGap = 100;
+                const maxGap = 350;
+                const gap = Math.floor(Math.random() * (maxGap - minGap)) + minGap;
+
+                const minWidth = 150;
+                const maxWidth = 500;
+                const width = Math.floor(Math.random() * (maxWidth - minWidth)) + minWidth;
+
+                const newX = lastPlatformX + gap;
+
+                // Adjust height: -100 (up) to +50 (down)
+                const heightChange = Math.floor(Math.random() * 150) - 100;
+
+                let newY = currentLevelHeight + heightChange;
+
+                // Clamp Y position within screen bounds
+                const screenHeight = window.innerHeight;
+                newY = Math.max(screenHeight - PLATFORM_HEIGHT - 50, newY); // Don't go too low
+                newY = Math.min(screenHeight - PLATBLE_HEIGHT - 400, newY); // Don't go too high
+
+                currentLevelHeight = newY;
+                createPlatform(newX, newY, width);
+            }
+        }
+
+        // --- GAME LOGIC UPDATES ---
+        function updatePhysics() {
+            if (isGameOver) return;
+
+            // 1. Apply Gravity
+            playerVelY += GRAVITY;
+
+            // 2. Horizontal Movement
+            let moveX = 0;
+            if (keys['ArrowRight'] || keys['KeyD']) {
+                moveX = RUN_SPEED;
+            } else if (keys['ArrowLeft'] || keys['KeyA']) {
+                moveX = -RUN_SPEED;
+            }
+            playerX += moveX;
+
+            // 3. Vertical Position Update
+            let newPlayerY = playerY + playerVelY;
+            isGrounded = false;
+
+            // 4. Collision Detection
+            platforms.forEach(p => {
+                // Simple AABB collision check
+                if (
+                    playerX < p.x + p.width &&          // Player right edge past platform left edge
+                    playerX + 30 > p.x &&               // Player left edge past platform right edge
+                    newPlayerY + 30 > p.y &&            // Player bottom past platform top
+                    newPlayerY < p.y + p.height         // Player top above platform bottom
+                ) {
+                    // Check if player is falling onto the platform (top collision)
+                    if (playerVelY > 0 && playerY + 30 <= p.y) {
+                        newPlayerY = p.y - 30; // Snap to the top
+                        playerVelY = 0;
+                        isGrounded = true;
+                    }
+                    // Prevent upward movement through platform (bottom collision)
+                    else if (playerVelY < 0 && playerY >= p.y + p.height) {
+                        playerVelY = 0; // Stop jump
+                        newPlayerY = p.y + p.height;
+                    }
+                }
+            });
+
+            playerY = newPlayerY;
+
+            // 5. Game Over Check (Falling off screen)
+            if (playerY > window.innerHeight) {
+                endGame();
+            }
+
+            // 6. Score Update
+            score = Math.floor(playerX / 10);
+            scoreDisplay.textContent = `Score: ${score}`;
+
+            // 7. Cleanup Old Platforms (Performance)
+            platforms = platforms.filter(p => {
+                if (p.x + p.width < playerX - window.innerWidth / 2) {
+                    p.el.remove();
+                    return false;
+                }
+                return true;
+            });
+        }
+
+        // --- RENDERING & CAMERA ---
+        function updateRender() {
+            // 1. Update Player position (Y is screen-fixed, X is relative to the world center)
+            player.style.transform = `translate(${PLAYER_SCREEN_X}px, ${playerY}px)`;
+
+            // 2. Calculate World Offset (Camera Follow)
+            // The camera should try to keep the player at PLAYER_SCREEN_X
+            let desiredWorldX = -(playerX - PLAYER_SCREEN_X);
+
+            // Smooth the camera movement
+            targetWorldX += (desiredWorldX - targetWorldX) * CAMERA_SMOOTHING;
+
+            // 3. Apply World Translation
+            world.style.transform = `translateX(${targetWorldX}px)`;
+        }
+
+        // --- GAME OVER ---
+        function endGame() {
+            if (isGameOver) return;
+            isGameOver = true;
+            cancelAnimationFrame(gameLoop);
+            document.getElementById('final-score').textContent = score;
+            gameOverScreen.style.display = 'block';
+        }
+
+
+        // --- MAIN GAME LOOP ---
+        function gameLoop() {
+            if (isGameOver) return;
+
+            updatePhysics();
+            generateNextPlatform();
+            updateRender();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+    </script>
+
+</body>
+</html>
