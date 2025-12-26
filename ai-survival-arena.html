@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Survival Arena</title>
+    <title>Neon Grid Defender</title>
     <style>
         body {
             display: flex;
@@ -14,17 +14,23 @@
             background-color: #1a1a1a;
             font-family: sans-serif;
             overflow: hidden;
+            /* Ensure the game area itself is fixed to its desired aspect ratio */
         }
 
         #gameContainer {
             position: relative;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
             border: 2px solid #00ffff;
+            /* Fixed dimensions handled by parent iframe scaling */
+            width: 800px; 
+            height: 600px;
         }
 
         #gameCanvas {
             display: block;
             background-color: #000000;
+            width: 100%;
+            height: 100%;
         }
 
         #uiOverlay {
@@ -33,7 +39,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            pointer-events: none; /* Allows mouse clicks to pass through */
+            pointer-events: none;
             color: #00ffff;
             padding: 10px;
             box-sizing: border-box;
@@ -54,8 +60,8 @@
             align-items: center;
             text-align: center;
             font-size: 30px;
-            display: none; /* Hidden initially */
-            pointer-events: all; /* Important to allow restart button clicks */
+            display: none;
+            pointer-events: all;
         }
 
         #restartButton {
@@ -78,6 +84,7 @@
 <body>
 
 <div id="gameContainer">
+    <!-- Canvas dimensions are set by container and CSS, but logic uses fixed 800x600 constants -->
     <canvas id="gameCanvas" width="800" height="600"></canvas>
     <div id="uiOverlay">
         Score: <span id="scoreDisplay">0</span>
@@ -100,9 +107,9 @@
         const FINAL_SCORE = document.getElementById('finalScore');
         const RESTART_BUTTON = document.getElementById('restartButton');
 
-        // --- Game Constants ---
-        const CANVAS_WIDTH = canvas.width;
-        const CANVAS_HEIGHT = canvas.height;
+        // --- Game Constants (These define the logic grid, fixed at 800x600) ---
+        const CANVAS_WIDTH = 800;
+        const CANVAS_HEIGHT = 600;
         const PLAYER_RADIUS = 10;
         const PROJECTILE_SPEED = 8;
         const PROJECTILE_SIZE = 2;
@@ -378,8 +385,10 @@
 
             // Get mouse position relative to canvas
             const rect = canvas.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const mouseY = event.clientY - rect.top;
+            
+            // Scaling correction: Calculate the mouse position relative to the 800x600 logical grid
+            const mouseX = (event.clientX - rect.left) * (CANVAS_WIDTH / rect.width);
+            const mouseY = (event.clientY - rect.top) * (CANVAS_HEIGHT / rect.height);
 
             // Calculate direction vector from player to mouse
             const dx = mouseX - player.x;

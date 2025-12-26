@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Space Survival</title>
+    <title>Void Runner</title>
     <style>
         /* CORE SETUP */
         body {
@@ -133,10 +133,9 @@
 
     <script>
         // --- GAME CONSTANTS AND STATE ---
-        const GAME_SPEED = 60; // Target FPS for smoother interpolation
         const PLAYER_SPEED = 5;
         const ASTEROID_SPAWN_RATE = 1500; // milliseconds
-        const COLLISION_RADIUS_FACTOR = 0.8; // Fudge factor for collision
+        const COLLISION_RADIUS_FACTOR = 0.8; 
 
         let gameState = 'ready'; // ready, running, gameover
         let lastTime = 0;
@@ -149,7 +148,7 @@
             element: document.getElementById('player'),
             x: window.innerWidth / 2,
             y: window.innerHeight / 2,
-            width: 24, // Matches CSS border size
+            width: 24,
             height: 24,
             radius: 12,
             hp: 3,
@@ -183,9 +182,10 @@
             // Clear existing asteroids from DOM
             document.querySelectorAll('.asteroid').forEach(a => a.remove());
 
-            // Reset player position
+            // Reset player position and rotation
             player.x = window.innerWidth / 2;
             player.y = window.innerHeight / 2;
+            player.rotation = 0;
             
             // Hide game over screen
             gameOverScreen.style.display = 'none';
@@ -194,6 +194,7 @@
             
             // Start the main loop
             if (gameState === 'running') {
+                lastTime = performance.now();
                 requestAnimationFrame(gameLoop);
             }
         }
@@ -228,31 +229,39 @@
             let dx = 0;
             let dy = 0;
 
-            if (keys['w'] || keys['arrowup']) dy -= PLAYER_SPEED;
-            if (keys['s'] || keys['arrowdown']) dy += PLAYER_SPEED;
-            if (keys['a'] || keys['arrowleft']) dx -= PLAYER_SPEED;
-            if (keys['d'] || keys['arrowright']) dx += PLAYER_SPEED;
+            // Use fixed delta for movement to smooth across variable framerates
+            const moveStep = PLAYER_SPEED * (deltaTime / 16.6); 
 
-            // Normalize diagonal movement (Pythagorean theorem)
+            if (keys['w'] || keys['arrowup']) dy -= moveStep;
+            if (keys['s'] || keys['arrowdown']) dy += moveStep;
+            if (keys['a'] || keys['arrowleft']) dx -= moveStep;
+            if (keys['d'] || keys['arrowright']) dx += moveStep;
+
+            // Normalize diagonal movement
             if (dx !== 0 && dy !== 0) {
                 const magnitude = Math.sqrt(dx * dx + dy * dy);
-                dx = (dx / magnitude) * PLAYER_SPEED;
-                dy = (dy / magnitude) * PLAYER_SPEED;
+                dx = (dx / magnitude) * moveStep;
+                dy = (dy / magnitude) * moveStep;
             }
 
             player.x += dx;
             player.y += dy;
 
             // Keep player within bounds
-            player.x = Math.max(player.width / 2, Math.min(window.innerWidth - player.width / 2, player.x));
-            player.y = Math.max(player.height / 2, Math.min(window.innerHeight - player.height / 2, player.y));
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+            player.x = Math.max(player.width / 2, Math.min(screenW - player.width / 2, player.x));
+            player.y = Math.max(player.height / 2, Math.min(screenH - player.height / 2, player.y));
             
-            // Calculate rotation based on movement direction (for a basic ship look)
+            // Calculate rotation based on movement direction 
             if (dx !== 0 || dy !== 0) {
-                player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
+                // Determine movement angle for rotation visual
+                if (dx !== 0 || dy !== 0) {
+                    player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
+                }
             }
 
-            // Apply transformation to the DOM element
+            // Apply transformation to the DOM element (translate centers the element, then moves it to player.x/y)
             player.element.style.transform = 
                 `translate(-50%, -50%) translate(${player.x}px, ${player.y}px) rotate(${player.rotation}deg)`;
         }
@@ -277,7 +286,7 @@
 
         function createAsteroid() {
             const size = 20 + Math.random() * 40; // 20px to 60px
-            const speed = 1 + Math.random() * 2; 
+            const baseSpeed = 1 + Math.random() * 2; 
 
             let startX, startY, vx, vy;
 
@@ -286,34 +295,37 @@
 
             const screenW = window.innerWidth;
             const screenH = window.innerHeight;
+            const targetX = screenW / 2 + (Math.random() * 200 - 100); // Target center +- 100
+            const targetY = screenH / 2 + (Math.random() * 200 - 100);
 
-            // Determine spawn coordinates (just outside the screen) and velocity vector
+            // Determine spawn coordinates and calculate velocity vector towards a target point
             switch (edge) {
                 case 0: // Top
                     startX = Math.random() * screenW;
                     startY = -size;
-                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
-                    vy = speed;
                     break;
                 case 1: // Right
                     startX = screenW + size;
                     startY = Math.random() * screenH;
-                    vx = -speed;
-                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
                     break;
                 case 2: // Bottom
                     startX = Math.random() * screenW;
                     startY = screenH + size;
-                    vx = (screenW / 2 + (Math.random() * 100 - 50) - startX) / 500;
-                    vy = -speed;
                     break;
                 case 3: // Left
                     startX = -size;
                     startY = Math.random() * screenH;
-                    vx = speed;
-                    vy = (screenH / 2 + (Math.random() * 100 - 50) - startY) / 500;
                     break;
             }
+
+            // Normalize vector towards the target
+            const dx = targetX - startX;
+            const dy = targetY - startY;
+            const length = Math.sqrt(dx * dx + dy * dy);
+            
+            vx = (dx / length) * baseSpeed;
+            vy = (dy / length) * baseSpeed;
+            
 
             const asteroidElement = document.createElement('div');
             asteroidElement.classList.add('asteroid');
@@ -329,7 +341,7 @@
                 radius: size / 2,
                 vx: vx,
                 vy: vy,
-                speed: speed
+                speed: baseSpeed
             };
             
             asteroids.push(newAsteroid);
@@ -345,28 +357,31 @@
 
         function updateAsteroids(deltaTime) {
             const toRemove = [];
+            const dt_factor = deltaTime / 16.6; // Scale movement by frame time
 
             for (let i = 0; i < asteroids.length; i++) {
                 const asteroid = asteroids[i];
                 
                 // Move asteroid
-                asteroid.x += asteroid.vx * deltaTime * 0.05;
-                asteroid.y += asteroid.vy * deltaTime * 0.05;
+                asteroid.x += asteroid.vx * dt_factor;
+                asteroid.y += asteroid.vy * dt_factor;
 
                 // Update DOM position
                 asteroid.element.style.left = `${asteroid.x - asteroid.radius}px`;
                 asteroid.element.style.top = `${asteroid.y - asteroid.radius}px`;
 
                 // Check if asteroid is outside bounds
+                const screenW = window.innerWidth;
+                const screenH = window.innerHeight;
                 if (asteroid.x < -asteroid.radius * 2 || 
-                    asteroid.x > window.innerWidth + asteroid.radius * 2 ||
+                    asteroid.x > screenW + asteroid.radius * 2 ||
                     asteroid.y < -asteroid.radius * 2 || 
-                    asteroid.y > window.innerHeight + asteroid.radius * 2) {
+                    asteroid.y > screenH + asteroid.radius * 2) {
                     toRemove.push(i);
                 }
             }
             
-            // Remove off-screen asteroids (in reverse order to maintain index integrity)
+            // Remove off-screen asteroids
             for (let i = toRemove.length - 1; i >= 0; i--) {
                 const index = toRemove[i];
                 asteroids[index].element.remove();
@@ -377,7 +392,6 @@
         // --- COLLISION DETECTION ---
 
         function checkCollisions() {
-            // Player collision point (center of the bounding box)
             const pCenterX = player.x;
             const pCenterY = player.y;
             const pRadius = player.radius * COLLISION_RADIUS_FACTOR;
@@ -398,7 +412,7 @@
                     // Remove the hit asteroid
                     asteroid.element.remove();
                     asteroids.splice(i, 1);
-                    i--; // Decrement index since we removed an element
+                    i--;
                 }
             }
         }
@@ -421,20 +435,17 @@
 
         // --- INITIAL SETUP ---
         window.onload = () => {
-            // Ensure player is centered initially (CSS handles the translation transformation)
-            player.element.style.left = '0px';
-            player.element.style.top = '0px'; 
-            
             // Start the game immediately when the page loads
             initGame();
         };
 
-        // Handle window resizing to keep bounds correct (though player position might shift slightly)
+        // Handle window resizing to keep bounds correct 
         window.addEventListener('resize', () => {
             if (gameState === 'running') {
                 // Re-center player if necessary upon resize
-                player.x = Math.min(player.x, window.innerWidth - player.width / 2);
-                player.y = Math.min(player.y, window.innerHeight - player.height / 2);
+                player.x = window.innerWidth / 2;
+                player.y = window.innerHeight / 2;
+                updatePlayer(0); // Force position update
             }
         });
 

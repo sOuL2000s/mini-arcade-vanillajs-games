@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Minimalist Infinite City Builder</title>
+    <title>Minimal Metropolis</title>
     <style>
         /* --- GLOBAL STYLES --- */
         body {
@@ -11,7 +11,7 @@
             background-color: #333;
             font-family: Arial, sans-serif;
             color: #fff;
-            overflow: hidden; /* Prevent body scroll, use container scroll */
+            overflow: hidden;
             display: flex;
             flex-direction: column;
             height: 100vh;
@@ -39,25 +39,27 @@
             font-weight: bold;
             text-transform: uppercase;
         }
-        .color-R { color: #f00; }
-        .color-C { color: #ff0; }
-        .color-I { color: #00f; }
+        .color-R { color: #00f; } /* Residential - Blue */
+        .color-C { color: #ff0; } /* Commercial - Yellow */
+        .color-I { color: #f00; } /* Industrial - Red */
 
         /* --- GAME CONTAINER & SCROLLING --- */
         #game-container {
             flex-grow: 1;
-            overflow: scroll; /* Allows the map to be scrolled infinitely */
+            overflow: scroll;
             cursor: crosshair;
             /* Center map roughly in view */
             margin-top: calc(50vh - 50px);
             margin-left: calc(50vw - 50px);
+            width: 100%; /* Ensure container fills the iframe */
+            height: 100%;
         }
 
         /* --- MAP GRID STYLES --- */
         #map {
             display: grid;
             background-color: #222;
-            transition: width 0.3s, height 0.3s; /* Smooth expansion */
+            transition: width 0.3s, height 0.3s;
             will-change: transform, width, height;
         }
 
@@ -70,9 +72,9 @@
         }
 
         /* Building Colors */
-        .R { background-color: #00f; } /* Residential - Blue */
-        .C { background-color: #ff0; } /* Commercial - Yellow */
-        .I { background-color: #f00; } /* Industrial - Red */
+        .R { background-color: #00f; }
+        .C { background-color: #ff0; }
+        .I { background-color: #f00; }
     </style>
 </head>
 <body>
@@ -81,7 +83,7 @@
         <p>Score: <span id="score-display">0</span></p>
         <p>Building: <span id="selected-type">Residential</span></p>
         <p class="key-hint">Keys: 1 (R), 2 (C), 3 (I)</p>
-        <p class="key-hint">Click near edges to expand map!</p>
+        <p class="key-hint">Click near bottom edge to expand map!</p>
     </div>
 
     <div id="game-container">
@@ -108,8 +110,6 @@
             score: 0,
             currentTypeKey: '1',
             gridSize: INITIAL_MAP_SIZE,
-            minCoord: 0, // Current minimum grid coordinate (row/col index)
-            maxCoord: INITIAL_MAP_SIZE - 1, // Current maximum grid coordinate
             isExpanding: false
         };
 
@@ -166,93 +166,6 @@
 
         // --- EXPANSION LOGIC ---
 
-        function expandMap(direction) {
-            if (state.isExpanding) return;
-            state.isExpanding = true;
-
-            const currentSize = state.gridSize;
-            const newSize = currentSize + EXPANSION_AMOUNT;
-            state.gridSize = newSize;
-
-            const fragment = document.createDocumentFragment();
-
-            let newCols = 0;
-            let newRows = 0;
-            let prepend = false;
-
-            if (direction === 'top' || direction === 'bottom') {
-                newRows = EXPANSION_AMOUNT;
-            }
-            if (direction === 'left' || direction === 'right') {
-                newCols = EXPANSION_AMOUNT;
-            }
-
-            // 1. Update Grid Dimensions (CSS)
-            mapEl.style.gridTemplateColumns = `repeat(${newSize}, ${TILE_SIZE}px)`;
-            mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
-            mapEl.style.width = `${newSize * TILE_SIZE}px`;
-            mapEl.style.height = `${newSize * TILE_SIZE}px`;
-
-            // 2. Generate new tiles
-            if (direction === 'bottom') {
-                // Add rows at the bottom
-                for (let r = currentSize; r < newSize; r++) {
-                    for (let c = 0; c < currentSize; c++) {
-                        const tile = createTile(r, c);
-                        fragment.appendChild(tile);
-                    }
-                }
-                mapEl.appendChild(fragment);
-
-            } else if (direction === 'right') {
-                // Add columns on the right (tricky, needs to insert rows interleaved)
-                let currentRowStart = currentSize * currentSize;
-                let newTiles = [];
-                for (let r = 0; r < currentSize; r++) {
-                    // Start index of the existing row (r * currentSize)
-                    const existingRowIndex = r * currentSize;
-                    
-                    // Generate new tiles for this row
-                    for (let c = currentSize; c < newSize; c++) {
-                        newTiles.push(createTile(r, c));
-                    }
-                }
-
-                // Since inserting into the DOM grid layout by simple appending/prepending is messy
-                // for edge columns, the safest method is often to rebuild or use careful insertion
-                // based on the grid index.
-                // Minimalist approach: We skip left/top expansion for simplicity and only implement
-                // right and bottom expansion, making the starting corner fixed (0,0).
-                
-                // Let's reset the assumption: For a minimalist builder, we simplify the infinite scrolling
-                // by *only* expanding downwards and rightwards. This avoids shifting coordinates and pre-pending
-                // which is complex in DOM grid. The origin (0,0) is always the top-left corner.
-
-                // Simplified Expansion (Only Rightward):
-                if (direction === 'right') {
-                     // Add EXPANSION_AMOUNT columns, interleaving them correctly
-                    for (let r = 0; r < currentSize; r++) {
-                        // Find the last tile of the current row
-                        const lastTileInRow = mapEl.querySelector(`[data-r="${r}"][data-c="${currentSize - 1}"]`);
-                        
-                        // Insert new tiles after it
-                        for (let c = currentSize; c < newSize; c++) {
-                            fragment.appendChild(createTile(r, c));
-                        }
-                        lastTileInRow.parentNode.insertBefore(fragment, lastTileInRow.nextSibling);
-                    }
-                }
-                
-            } else {
-                // Ignore top/left for minimalist version due to complex coordinate shifting requirements
-                // We rely on starting large and expanding only R/B
-                console.warn("Only bottom/right expansion supported in this minimal version.");
-            }
-            
-            // Allow expansion again shortly
-            setTimeout(() => { state.isExpanding = false; }, 300);
-        }
-
         function createTile(r, c) {
             const tile = document.createElement('div');
             tile.className = 'tile';
@@ -261,55 +174,34 @@
             return tile;
         }
 
-
+        // Simplified Expansion (Only expands downward)
         function checkAndExpandMap(r, c) {
             const size = state.gridSize;
 
-            if (r >= size - EXPANSION_THRESHOLD) {
-                // Near bottom edge
-                expandMap('bottom');
-            }
-            
-            if (c >= size - EXPANSION_THRESHOLD) {
-                // Near right edge
-                // NOTE: Right expansion is complex with interleaved DOM updates. 
-                // For this minimal demo, we'll implement a simplified 1D expansion
-                // (expand width and height simultaneously on hitting any edge).
+            if (r >= size - EXPANSION_THRESHOLD && !state.isExpanding) {
+                state.isExpanding = true;
                 
-                // Simplified expansion if any edge is hit:
-                expandMap('bottom'); // Expand height
-                expandMap('right'); // Expand width (requires re-engineering, let's keep it 1D for ultra-minimalism)
-            }
-            
-            // Reverting to the simpler, single-direction "down and right" expansion trigger:
-            if (r >= size - EXPONSION_THRESHOLD || c >= size - EXPANSION_THRESHOLD) {
-                // Combined Expansion (Expands both R and C if hit near edge)
+                const currentSize = state.gridSize;
+                const newSize = currentSize + EXPANSION_AMOUNT;
                 
-                // This is the simplest way to visually expand the grid without complex DOM insertions
-                // Note: This implementation only properly handles expanding rows at the bottom 
-                // and expects columns to be added correctly in the grid template, which is tricky.
-                
-                // Let's implement the simplest possible visual expansion: ONLY on the bottom edge
-                if (r >= size - EXPANSION_THRESHOLD) {
-                    const currentSize = state.gridSize;
-                    const newSize = currentSize + EXPANSION_AMOUNT;
-                    
-                    // 1. Generate new tiles (new rows only)
-                    const fragment = document.createDocumentFragment();
-                    for (let row = currentSize; row < newSize; row++) {
-                        for (let col = 0; col < currentSize; col++) {
-                            fragment.appendChild(createTile(row, col));
-                        }
+                // 1. Generate new tiles (new rows only)
+                const fragment = document.createDocumentFragment();
+                for (let row = currentSize; row < newSize; row++) {
+                    for (let col = 0; col < currentSize; col++) {
+                        fragment.appendChild(createTile(row, col));
                     }
-                    mapEl.appendChild(fragment);
-                    
-                    // 2. Update state and dimensions
-                    state.gridSize = newSize;
-                    mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
-                    mapEl.style.height = `${newSize * TILE_SIZE}px`;
-                    
-                    console.log(`Map expanded to ${newSize}x${currentSize}`);
                 }
+                mapEl.appendChild(fragment);
+                
+                // 2. Update state and dimensions
+                state.gridSize = newSize;
+                mapEl.style.gridTemplateRows = `repeat(${newSize}, ${TILE_SIZE}px)`;
+                mapEl.style.height = `${newSize * TILE_SIZE}px`;
+                
+                console.log(`Map expanded to ${newSize}x${currentSize}`);
+                
+                // Allow expansion again shortly
+                setTimeout(() => { state.isExpanding = false; }, 300);
             }
         }
 

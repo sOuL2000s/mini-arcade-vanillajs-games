@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Infinite Parkour Platformer</title>
+    <title>Gravity Glide</title>
     <style>
         /* --- GLOBAL RESET & BASE STYLES --- */
         body, html {
@@ -14,11 +14,11 @@
             font-family: sans-serif;
         }
 
-        /* --- GAME CONTAINER --- */
+        /* --- GAME CONTAINER (Responsive to iframe size) --- */
         #game-container {
             position: relative;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             background-color: #87ceeb; /* Sky Blue */
             overflow: hidden;
         }
@@ -28,9 +28,9 @@
             position: absolute;
             top: 0;
             left: 0;
-            width: 500000px; /* Effectively infinite width */
+            width: 500000px;
             height: 100%;
-            will-change: transform; /* Performance optimization for translation */
+            will-change: transform;
         }
 
         /* --- PLAYER STYLES --- */
@@ -127,6 +127,7 @@
         let world;
         let scoreDisplay;
         let gameOverScreen;
+        let screenHeight; // Dynamic height variable
 
         let platforms = [];
         let keys = {};
@@ -139,8 +140,8 @@
         let score = 0;
 
         let lastPlatformX = 0;
-        let currentLevelHeight = window.innerHeight - PLATFORM_HEIGHT - 100;
-        let targetWorldX = 0; // The target position for the world translation
+        let currentLevelHeight = 0; // Calculated on load
+        let targetWorldX = 0;
 
         // --- INITIALIZATION ---
         window.onload = function() {
@@ -149,7 +150,9 @@
             scoreDisplay = document.getElementById('score');
             gameOverScreen = document.getElementById('game-over-screen');
 
-            // Set initial player Y position relative to screen bottom
+            // Set initial dynamic screen size
+            screenHeight = window.innerHeight;
+            currentLevelHeight = screenHeight - PLATFORM_HEIGHT - 100;
             playerY = currentLevelHeight - 30; // 30 is player height
 
             // Create the initial starting platform
@@ -188,7 +191,6 @@
         }
 
         function generateNextPlatform() {
-            // Check if we need to generate more platforms (i.e., if the last platform is within 1000px of playerX)
             if (lastPlatformX < playerX + window.innerWidth + 500) {
                 const minGap = 100;
                 const maxGap = 350;
@@ -208,7 +210,7 @@
                 // Clamp Y position within screen bounds
                 const screenHeight = window.innerHeight;
                 newY = Math.max(screenHeight - PLATFORM_HEIGHT - 50, newY); // Don't go too low
-                newY = Math.min(screenHeight - PLATBLE_HEIGHT - 400, newY); // Don't go too high
+                newY = Math.min(screenHeight - PLATFORM_HEIGHT - 400, newY); // Don't go too high
 
                 currentLevelHeight = newY;
                 createPlatform(newX, newY, width);
@@ -218,6 +220,7 @@
         // --- GAME LOGIC UPDATES ---
         function updatePhysics() {
             if (isGameOver) return;
+            screenHeight = window.innerHeight; // Keep dynamic height updated
 
             // 1. Apply Gravity
             playerVelY += GRAVITY;
@@ -239,10 +242,10 @@
             platforms.forEach(p => {
                 // Simple AABB collision check
                 if (
-                    playerX < p.x + p.width &&          // Player right edge past platform left edge
-                    playerX + 30 > p.x &&               // Player left edge past platform right edge
-                    newPlayerY + 30 > p.y &&            // Player bottom past platform top
-                    newPlayerY < p.y + p.height         // Player top above platform bottom
+                    playerX < p.x + p.width &&
+                    playerX + 30 > p.x &&
+                    newPlayerY + 30 > p.y &&
+                    newPlayerY < p.y + p.height
                 ) {
                     // Check if player is falling onto the platform (top collision)
                     if (playerVelY > 0 && playerY + 30 <= p.y) {
@@ -261,7 +264,7 @@
             playerY = newPlayerY;
 
             // 5. Game Over Check (Falling off screen)
-            if (playerY > window.innerHeight) {
+            if (playerY > screenHeight) {
                 endGame();
             }
 
@@ -285,10 +288,7 @@
             player.style.transform = `translate(${PLAYER_SCREEN_X}px, ${playerY}px)`;
 
             // 2. Calculate World Offset (Camera Follow)
-            // The camera should try to keep the player at PLAYER_SCREEN_X
             let desiredWorldX = -(playerX - PLAYER_SCREEN_X);
-
-            // Smooth the camera movement
             targetWorldX += (desiredWorldX - targetWorldX) * CAMERA_SMOOTHING;
 
             // 3. Apply World Translation

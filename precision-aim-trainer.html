@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Precision Aim Trainer</title>
+    <title>Vector Clicker</title>
     <style>
         /* Base Reset and Setup */
         body, html {
@@ -29,16 +29,14 @@
             align-items: center;
         }
 
-        /* Game Area Styling */
+        /* Game Area Styling (Uses 100% of the iframe window) */
         #game-area {
-            width: 98vw;
-            height: 90vh;
-            margin: 1vh auto 0;
+            width: 100%;
+            height: calc(100vh - 5vh - 2px); /* Full height minus HUD */
             background-color: #11111b;
             position: relative;
             overflow: hidden;
             cursor: crosshair;
-            border-radius: 8px;
             box-shadow: 0 0 15px rgba(0, 0, 0, 0.5);
         }
 
@@ -46,23 +44,23 @@
         #target {
             position: absolute;
             cursor: pointer;
-            background-color: #f38ba8; /* Pink/Red default */
+            background-color: #f38ba8;
             border-radius: 50%;
             transition: transform 100ms ease-out, background-color 0ms;
             box-shadow: 0 0 10px rgba(243, 139, 148, 0.7);
-            display: none; /* Start hidden */
+            display: none;
             z-index: 10;
         }
 
         /* Visual Feedback Classes */
         .target-hit {
-            background-color: #a6e3a1 !important; /* Green */
+            background-color: #a6e3a1 !important;
             box-shadow: 0 0 15px #a6e3a1 !important;
             transform: scale(1.1);
         }
 
         .target-miss {
-            background-color: #f9e2af !important; /* Yellow/Orange warning */
+            background-color: #f9e2af !important;
             box-shadow: 0 0 15px #f9e2af !important;
             transform: scale(0.9);
         }
@@ -121,7 +119,7 @@
     <div id="game-area">
         <div id="target"></div>
         <div id="overlay">
-            <h1>Precision Aim Trainer</h1>
+            <h1>Vector Clicker</h1>
             <p id="overlay-text">Click the colored target as fast as possible to increase your score.</p>
             <p>Difficulty continuously scales: Targets get smaller and disappear faster!</p>
             <p>Miss or run out of time, and you lose a life. Lose 3 lives to end the game.</p>
@@ -137,8 +135,8 @@
         const MIN_VISIBILITY_TIME = 300; // Hard minimum time
 
         // Scaling Factors (Score-dependent difficulty)
-        const SIZE_DECREMENT_FACTOR = 0.985; // Target size = Initial * (Factor ^ Score)
-        const TIME_DECREMENT_FACTOR = 0.99; // Time = Initial * (Factor ^ Score)
+        const SIZE_DECREMENT_FACTOR = 0.985;
+        const TIME_DECREMENT_FACTOR = 0.99;
 
         let score = 0;
         let lives = 3;
@@ -205,7 +203,6 @@
 
             // Ensure the click was exactly on the target element
             if (event.target !== targetElement) {
-                // This shouldn't happen if the target listener is used, but good practice
                 return;
             }
 
@@ -284,7 +281,6 @@
         targetElement.addEventListener('click', handleHit);
 
         // 3. Game Area Miss Handler
-        // If the player clicks the game area but not the target, it's a miss.
         gameArea.addEventListener('click', (event) => {
             if (gameActive && event.target === gameArea) {
                 handleMiss();

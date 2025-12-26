@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Bullet Hell Survival</title>
+    <title>Starfall Dodgem</title>
     <!-- All required CSS, structure, and JS are contained in this single file -->
 </head>
 <body>
@@ -23,11 +23,16 @@
     #game-container {
         position: relative;
         box-shadow: 0 0 20px rgba(0, 0, 0, 0.5);
+        /* Fixed dimensions handled by parent iframe scaling */
+        width: 800px;
+        height: 600px;
     }
     canvas {
         display: block;
         background-color: #000;
         border: 2px solid #333;
+        width: 100%;
+        height: 100%;
     }
     #ui-overlay {
         position: absolute;
@@ -80,7 +85,7 @@
         Score: <span id="score-display">0</span> ms | Bullets: <span id="bullet-count">0</span>
         <div style="float: right;">Movement: WASD / Arrows</div>
     </div>
-    <canvas id="gameCanvas"></canvas>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
 
     <div id="game-over-screen">
         <h1>GAME OVER</h1>
@@ -98,7 +103,8 @@
     // --- Game State Variables ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
-    canvas.width = CANVAS_WIDTH;
+    // Canvas buffer sizes are fixed for consistent game logic
+    canvas.width = CANVAS_WIDTH; 
     canvas.height = CANVAS_HEIGHT;
 
     let gameRunning = false;
@@ -218,7 +224,7 @@
             bullet.x += bullet.dx;
             bullet.y += bullet.dy;
 
-            // Collision Check (Distance squared for speed optimization, though Math.hypot is often faster in modern JS)
+            // Collision Check
             const dist = Math.hypot(player.x - bullet.x, player.y - bullet.y);
             
             if (dist < player.radius + bullet.radius) {
@@ -237,7 +243,7 @@
     }
 
     function updateDifficulty() {
-        // Difficulty scales by 0.1 every 5 seconds (300 frames at 60 FPS)
+        // Difficulty scales by 0.15 every 5 seconds
         const elapsedSeconds = (performance.now() - startTime) / 1000;
         difficultyMultiplier = 1.0 + (elapsedSeconds / 5) * 0.15;
     }
@@ -314,8 +320,7 @@
         ctx.fillStyle = player.color;
         ctx.fill();
         
-        // Draw Bullets (Optimized for drawing many circles)
-        // Group all drawing operations for performance
+        // Draw Bullets
         ctx.fillStyle = '#FF4444'; 
         for (const bullet of bullets) {
             ctx.beginPath();
