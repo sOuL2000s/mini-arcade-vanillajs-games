@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Self Chess</title>
+    <title>Self Chess - Advanced</title>
     <style>
-        /* Base Styles */
+        /* Base Styles (Retained) */
         body {
             display: flex;
             flex-direction: column;
@@ -19,7 +19,6 @@
             overflow: hidden;
         }
 
-        /* Game Container (Maximizes a square board within the viewport) */
         #game-container {
             position: relative;
             display: flex;
@@ -32,17 +31,14 @@
             height: 100vh;
         }
 
-        /* Chess Board Styling */
         #chessboard {
             display: grid;
             border: 8px solid #3c3f41;
             box-shadow: 0 10px 40px rgba(0, 0, 0, 0.7);
-            /* Rotation Transition */
             transition: transform 1.0s ease-in-out;
             transform-style: preserve-3d;
         }
 
-        /* Class applied when Black is the current player (rotates the board 180deg) */
         .board-rotated {
             transform: rotate(180deg);
         }
@@ -56,7 +52,6 @@
             cursor: pointer;
         }
 
-        /* Cell Colors (Dark/Light wood aesthetic) */
         .light {
             background-color: #e0e4cc;
         }
@@ -64,11 +59,9 @@
             background-color: #77926b;
         }
 
-        /* Piece Styling (Unicode Chess Pieces) */
         .piece {
-            font-size: 4vmin; /* Use viewport units for scaling */
+            font-size: 4vmin; 
             line-height: 1;
-            /* Piece counter-rotation transition is synced with the board transition */
             transition: transform 1.0s ease-in-out;
             z-index: 10;
         }
@@ -82,11 +75,9 @@
             text-shadow: 1px 1px 2px #dcdcdc;
         }
 
-        /* Counter-Rotation for Pieces: If the board is rotated, rotate the piece back 180deg */
         .board-rotated .piece {
             transform: rotate(180deg);
         }
-        /* Ensure non-rotated pieces start at 0deg transform */
         #chessboard:not(.board-rotated) .piece {
             transform: rotate(0deg);
         }
@@ -96,11 +87,27 @@
             box-shadow: inset 0 0 10px #00ffff;
             background-color: rgba(0, 255, 255, 0.3) !important;
         }
+        
+        /* New: Highlight for the King in Check */
+        .king-in-check {
+             background-color: #ff000088 !important; /* Red background for King in check */
+        }
 
         .move-highlight {
-            background-color: rgba(255, 255, 0, 0.4) !important;
+            box-shadow: inset 0 0 5px rgba(255, 255, 0, 0.9);
+            position: relative;
         }
         
+        .move-highlight::after {
+            content: '';
+            position: absolute;
+            width: 30%;
+            height: 30%;
+            border-radius: 50%;
+            background-color: rgba(255, 255, 0, 0.8);
+            pointer-events: none;
+        }
+
         /* UI and Status */
         #status-bar {
             margin-top: 10px;
@@ -115,9 +122,14 @@
             color: white;
             padding: 0 5px;
         }
+        #check-status {
+            color: red;
+            font-weight: bold;
+            margin-left: 10px;
+        }
         
-        /* --- Menu Overlay Styles (Standardized) --- */
-        #menu-overlay {
+        /* Menu Overlays */
+        #menu-overlay, #game-over-screen {
             position: absolute;
             top: 0;
             left: 0;
@@ -125,7 +137,7 @@
             height: 100%;
             background-color: rgba(0, 0, 0, 0.95);
             color: #fff;
-            display: flex; 
+            display: none; 
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -140,7 +152,7 @@
             margin-bottom: 20px;
         }
 
-        #menu-overlay button {
+        #menu-overlay button, #game-over-screen button {
             padding: 10px 20px;
             margin: 10px;
             font-size: 1em;
@@ -162,21 +174,6 @@
             text-align: left;
             display: none;
         }
-        
-        #game-over-screen {
-            display: none;
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            z-index: 400;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
@@ -185,14 +182,13 @@
         
         <div id="status-bar">
             Current Turn: <span id="turn-indicator">White</span>
+            <span id="check-status"></span>
         </div>
 
-        <!-- Initial board state has no rotation (White starts at South/Bottom) -->
         <div id="chessboard">
             <!-- Cells generated by JavaScript -->
         </div>
         
-        <!-- NEW MENU OVERLAY -->
         <div id="menu-overlay">
             <h2>Self Chess</h2>
             <button id="btn-start" onclick="startGame()">Start Game (White)</button>
@@ -201,16 +197,16 @@
             <div id="instructions-box">
                 <h3>Controls & Goal:</h3>
                 <p><strong>Goal:</strong> Play both White and Black sides of a standard chess game.</p>
-                <p><strong>Perspective:</strong> The board automatically rotates 180° after every move, ensuring the current player's side is always at the South (bottom).</p>
-                <p><strong>Movement:</strong> Click a piece, then click a destination square to move/capture.</p>
-                <p>Note: This is a visually focused prototype. Basic move validation is implemented, but advanced rules (checkmate, castling, en passant) are omitted. The player determines the winner.</p>
+                <p><strong>Perspective:</strong> The board automatically rotates 180° after every move.</p>
+                <p><strong>Validation:</strong> Standard piece movement, captures, check logic, and castling are implemented.</p>
+                <p>Note: En passant and Pawn promotion are NOT included.</p>
                 <p>Press ESC to pause/resume the game.</p>
             </div>
         </div>
         
         <div id="game-over-screen">
-             <h1>Game Ended by Player</h1>
-             <p>Final Status: <span id="final-status">Draw</span></p>
+             <h1>Game Over</h1>
+             <p>Result: <span id="final-status">Draw</span></p>
              <button onclick="startGame()">Start New Game</button>
         </div>
     </div>
@@ -228,20 +224,29 @@
         let board = [];
         let currentTurn = 'W'; // 'W' or 'B'
         let selectedCell = null; // {r, c}
-        let isBoardRotated = false; // False = White (South) at bottom, True = Black (South) at bottom
+        let isBoardRotated = false; 
         let isGamePaused = true;
         let gameRunning = false;
+
+        // Tracks piece movement for Castling eligibility
+        let hasMoved = {
+            'W_K': false, 'B_K': false,
+            'W_R_0': false, 'W_R_7': false, // White Rooks at (7, 0) and (7, 7)
+            'B_R_0': false, 'B_R_7': false  // Black Rooks at (0, 0) and (0, 7)
+        };
 
         // --- DOM Elements ---
         const chessboardEl = document.getElementById('chessboard');
         const turnIndicatorEl = document.getElementById('turn-indicator');
+        const checkStatusEl = document.getElementById('check-status');
         const menuOverlayEl = document.getElementById('menu-overlay');
         const instructionsBoxEl = document.getElementById('instructions-box');
         const btnResumeEl = document.getElementById('btn-resume');
         const btnStartEl = document.getElementById('btn-start');
         const gameOverScreenEl = document.getElementById('game-over-screen');
+        const finalStatusEl = document.getElementById('final-status');
 
-        // --- Utility & Menu Functions ---
+        // --- Utility & Menu Functions (Mostly unchanged) ---
         
         function toggleInstructions() {
             instructionsBoxEl.style.display = instructionsBoxEl.style.display === 'block' ? 'none' : 'block';
@@ -253,13 +258,14 @@
             menuOverlayEl.style.display = 'none';
         }
 
-        function pauseGame() {
-            if (!gameRunning) return;
-            isGamePaused = true;
-            menuOverlayEl.style.display = 'flex';
-            btnStartEl.style.display = 'none';
-            btnResumeEl.style.display = 'block'; 
-            instructionsBoxEl.style.display = 'none';
+        function pauseGame(overrideStatus) {
+            if (overrideStatus || gameRunning) {
+                isGamePaused = true;
+                menuOverlayEl.style.display = 'flex';
+                btnStartEl.style.display = 'none';
+                btnResumeEl.style.display = 'block'; 
+                instructionsBoxEl.style.display = 'none';
+            }
         }
         
         document.addEventListener('keydown', (e) => {
@@ -271,9 +277,7 @@
 
         function setupBoardSize() {
             const container = document.getElementById('game-container');
-            // Calculate size based on the smaller dimension, reserving 80px for margins/status
             const size = Math.min(container.clientWidth, container.clientHeight) - 80; 
-            
             const cellSize = Math.floor(size / GRID_SIZE);
             const boardSizePx = cellSize * GRID_SIZE;
 
@@ -284,9 +288,236 @@
         }
         window.addEventListener('resize', setupBoardSize);
 
-        // --- Chess Logic Core ---
+        // --- General Chess Helpers ---
+        
+        function isOnBoard(r, c) {
+            return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
+        }
+
+        function getPieceColor(pieceCode) {
+            if (!pieceCode) return null;
+            return pieceCode === pieceCode.toUpperCase() ? 'W' : 'B';
+        }
+        
+        function findKing(color) {
+            const kingCode = (color === 'W' ? 'K' : 'k');
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (board[r][c] === kingCode) {
+                        return { r, c };
+                    }
+                }
+            }
+            return null; // Should not happen in a standard game
+        }
+
+        // --- Check and Castling Logic ---
+
+        // Checks if a given square (r, c) is attacked by the specified attackerColor
+        function isSquareAttacked(r, c, attackerColor) {
+            const opponentColor = attackerColor;
+            
+            // Iterate through every square on the board
+            for (let i = 0; i < GRID_SIZE; i++) {
+                for (let j = 0; j < GRID_SIZE; j++) {
+                    const piece = board[i][j];
+                    if (piece && getPieceColor(piece) === opponentColor) {
+                        
+                        // We need the PSEUDO-LEGAL moves of the attacker
+                        const pseudoMoves = getValidMoves(i, j, true); 
+                        
+                        if (pseudoMoves.some(move => move.r === r && move.c === c)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        }
+
+        function isKingInCheck(color) {
+            const kingPos = findKing(color);
+            if (!kingPos) return false;
+            const attackerColor = (color === 'W' ? 'B' : 'W');
+            return isSquareAttacked(kingPos.r, kingPos.c, attackerColor);
+        }
+        
+        // Simulates a move and checks if the King is safe afterwards.
+        function isMoveLegal(startR, startC, endR, endC, color) {
+            const originalPiece = board[startR][startC];
+            const capturedPiece = board[endR][endC];
+            
+            // Perform temporary move
+            board[endR][endC] = originalPiece;
+            board[startR][startC] = null;
+
+            const isSafe = !isKingInCheck(color);
+
+            // Revert temporary move
+            board[startR][startC] = originalPiece;
+            board[endR][endC] = capturedPiece;
+
+            return isSafe;
+        }
+
+        // --- Move Generation ---
+
+        /**
+         * Calculates pseudo-legal moves for a piece at (r, c).
+         * @param {boolean} ignoreCastling If true, skips castling logic (used for attack detection).
+         */
+        function getValidMoves(r, c, ignoreCastling = false) {
+            const pieceCode = board[r][c];
+            if (!pieceCode) return [];
+
+            const color = getPieceColor(pieceCode);
+            const moves = [];
+            const pieceType = pieceCode.toLowerCase();
+
+            // Helper for sliding pieces (Rook, Bishop, Queen)
+            function checkSlidingMoves(directions) {
+                for (const [dr, dc] of directions) {
+                    let nr = r + dr;
+                    let nc = c + dc;
+                    while (isOnBoard(nr, nc)) {
+                        const targetPiece = board[nr][nc];
+                        const targetColor = getPieceColor(targetPiece);
+
+                        if (!targetPiece) {
+                            moves.push({ r: nr, c: nc });
+                        } else {
+                            if (targetColor !== color) {
+                                moves.push({ r: nr, c: nc }); // Capture
+                            }
+                            break; 
+                        }
+                        nr += dr;
+                        nc += dc;
+                    }
+                }
+            }
+            
+            // --- Standard Move Generation ---
+            if (pieceType === 'p') {
+                const direction = (color === 'W') ? -1 : 1; 
+                const startRank = (color === 'W') ? 6 : 1; 
+                
+                // 1. Forward 1 step
+                let nr1 = r + direction;
+                if (isOnBoard(nr1, c) && !board[nr1][c]) {
+                    moves.push({ r: nr1, c: c });
+
+                    // 2. Forward 2 steps (from start rank)
+                    let nr2 = r + 2 * direction;
+                    if (r === startRank && isOnBoard(nr2, c) && !board[nr2][c] && !board[r + direction][c]) {
+                        moves.push({ r: nr2, c: c });
+                    }
+                }
+
+                // 3. Captures (Diagonal)
+                for (const dc of [-1, 1]) {
+                    const nc = c + dc;
+                    if (isOnBoard(nr1, nc)) {
+                        const targetPiece = board[nr1][nc];
+                        const targetColor = getPieceColor(targetPiece);
+                        // Pawns only capture diagonally
+                        if (targetPiece && targetColor !== color) {
+                            moves.push({ r: nr1, c: nc });
+                        }
+                    }
+                }
+            } else if (pieceType === 'r') {
+                checkSlidingMoves([[0, 1], [0, -1], [1, 0], [-1, 0]]);
+            } else if (pieceType === 'b') {
+                checkSlidingMoves([[1, 1], [1, -1], [-1, 1], [-1, -1]]);
+            } else if (pieceType === 'q') {
+                checkSlidingMoves([[0, 1], [0, -1], [1, 0], [-1, 0], [1, 1], [1, -1], [-1, 1], [-1, -1]]);
+            } else if (pieceType === 'n') {
+                const knightMoves = [
+                    [-2, -1], [-2, 1], [-1, -2], [-1, 2], [2, -1], [2, 1], [1, -2], [1, 2]
+                ];
+                for (const [dr, dc] of knightMoves) {
+                    const nr = r + dr;
+                    const nc = c + dc;
+                    if (isOnBoard(nr, nc) && getPieceColor(board[nr][nc]) !== color) {
+                        moves.push({ r: nr, c: nc });
+                    }
+                }
+            } else if (pieceType === 'k') {
+                // King: 1 step in any direction
+                for (let dr = -1; dr <= 1; dr++) {
+                    for (let dc = -1; dc <= 1; dc++) {
+                        if (dr === 0 && dc === 0) continue;
+                        const nr = r + dr;
+                        const nc = c + dc;
+                        if (isOnBoard(nr, nc) && getPieceColor(board[nr][nc]) !== color) {
+                            moves.push({ r: nr, c: nc });
+                        }
+                    }
+                }
+
+                // --- Castling (Only if not ignoring it for attack checks) ---
+                if (!ignoreCastling) {
+                    const rank = (color === 'W' ? 7 : 0);
+                    const kingKey = color + '_K';
+
+                    if (!hasMoved[kingKey] && r === rank && c === 4) {
+                        const opponentColor = (color === 'W' ? 'B' : 'W');
+
+                        // King-side Castling (Short)
+                        if (!hasMoved[`${color}_R_7`] && 
+                            !board[rank][5] && !board[rank][6] &&
+                            !isSquareAttacked(rank, 4, opponentColor) && // King not in check
+                            !isSquareAttacked(rank, 5, opponentColor) && // Not moving through check
+                            !isSquareAttacked(rank, 6, opponentColor)) { // Not landing in check
+                            
+                            // Use a special target coordinate (e.g., c=6) to indicate castling
+                            moves.push({ r: rank, c: 6, isCastling: true, rookFrom: 7, rookTo: 5 });
+                        }
+
+                        // Queen-side Castling (Long)
+                        if (!hasMoved[`${color}_R_0`] && 
+                            !board[rank][3] && !board[rank][2] && !board[rank][1] && // Must be empty
+                            !isSquareAttacked(rank, 4, opponentColor) && 
+                            !isSquareAttacked(rank, 3, opponentColor) && // Not moving through check
+                            !isSquareAttacked(rank, 2, opponentColor)) { // Not landing in check
+                            
+                            // Use a special target coordinate (e.g., c=2) to indicate castling
+                            moves.push({ r: rank, c: 2, isCastling: true, rookFrom: 0, rookTo: 3 });
+                        }
+                    }
+                }
+            }
+
+            return moves;
+        }
+        
+        /**
+         * Filters pseudo-legal moves through the safety check (isMoveLegal).
+         */
+        function getLegalMoves(r, c) {
+            const pieceCode = board[r][c];
+            if (!pieceCode) return [];
+            
+            const color = getPieceColor(pieceCode);
+            const pseudoMoves = getValidMoves(r, c);
+            const legalMoves = [];
+
+            for (const move of pseudoMoves) {
+                // If it's castling, we rely on the extensive checks already done in getValidMoves
+                if (move.isCastling) {
+                    legalMoves.push(move);
+                } else if (isMoveLegal(r, c, move.r, move.c, color)) {
+                    legalMoves.push(move);
+                }
+            }
+            return legalMoves;
+        }
+
+        // --- Board & UI Management ---
 
         function fenToBoard(fen) {
+            // (Function is unchanged)
             const rows = fen.split(' ')[0].split('/');
             const newBoard = [];
             for (let r = 0; r < GRID_SIZE; r++) {
@@ -297,7 +528,6 @@
                         newBoard[r][c] = char;
                         c++;
                     } else if (!isNaN(parseInt(char))) {
-                        // Empty squares
                         for (let i = 0; i < parseInt(char); i++) {
                             newBoard[r][c] = null;
                             c++;
@@ -309,9 +539,10 @@
         }
 
         function renderBoard() {
-            if (isGamePaused) return;
+            if (isGamePaused && gameRunning) return; 
 
             chessboardEl.innerHTML = '';
+            const kingInCheckPos = isKingInCheck(currentTurn) ? findKing(currentTurn) : null;
             
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
@@ -322,11 +553,15 @@
                     cell.dataset.c = c;
                     cell.onclick = () => handleCellClick(r, c);
 
-                    if (board[r][c]) {
+                    if (kingInCheckPos && kingInCheckPos.r === r && kingInCheckPos.c === c) {
+                        cell.classList.add('king-in-check');
+                    }
+
+                    if (board[r] && board[r][c]) {
                         const pieceCode = board[r][c];
                         const pieceEl = document.createElement('div');
                         pieceEl.classList.add('piece');
-                        pieceEl.classList.add(pieceCode === pieceCode.toUpperCase() ? 'piece-W' : 'piece-B');
+                        pieceEl.classList.add(getPieceColor(pieceCode) === 'W' ? 'piece-W' : 'piece-B');
                         pieceEl.innerHTML = PIECES[pieceCode];
                         
                         cell.appendChild(pieceEl);
@@ -339,35 +574,22 @@
                     chessboardEl.appendChild(cell);
                 }
             }
+            
+            if (selectedCell) {
+                highlightValidMoves(selectedCell.r, selectedCell.c);
+            }
         }
         
-        function highlightValidMoves(piece, r, c) {
-            // Placeholder: Simple proximity highlight for visual effect.
-            // A full chess engine is not provided.
-            
-            const highlights = [];
-            for(let dr = -1; dr <= 1; dr++) {
-                for(let dc = -1; dc <= 1; dc++) {
-                    if (dr === 0 && dc === 0) continue;
-                    const nr = r + dr;
-                    const nc = c + dc;
-                    if (nr >= 0 && nr < GRID_SIZE && nc >= 0 && nc < GRID_SIZE) {
-                        highlights.push({r: nr, c: nc});
-                    }
-                }
-            }
+        function highlightValidMoves(r, c) {
+            const legalMoves = getLegalMoves(r, c);
             
             document.querySelectorAll('.cell').forEach(cellEl => {
                 cellEl.classList.remove('move-highlight');
                 const hr = parseInt(cellEl.dataset.r);
                 const hc = parseInt(cellEl.dataset.c);
-                if (highlights.some(h => h.r === hr && h.c === hc)) {
-                    // Prevent highlighting a square occupied by the current player's own piece
-                    const targetPiece = board[hr][hc];
-                    const targetColor = targetPiece ? (targetPiece === targetPiece.toUpperCase() ? 'W' : 'B') : null;
-                    if (targetColor !== currentTurn) {
-                       cellEl.classList.add('move-highlight');
-                    }
+                
+                if (legalMoves.some(h => h.r === hr && h.c === hc)) {
+                    cellEl.classList.add('move-highlight');
                 }
             });
         }
@@ -377,49 +599,100 @@
                 cellEl.classList.remove('selected', 'move-highlight');
             });
         }
+        
+        function updateHasMoved(r, c, pieceCode) {
+            const color = getPieceColor(pieceCode);
+            const pieceType = pieceCode.toUpperCase();
+            
+            if (pieceType === 'K') {
+                hasMoved[`${color}_K`] = true;
+            } else if (pieceType === 'R') {
+                const rank = (color === 'W' ? 7 : 0);
+                if (r === rank && c === 0) {
+                    hasMoved[`${color}_R_0`] = true;
+                } else if (r === rank && c === 7) {
+                    hasMoved[`${color}_R_7`] = true;
+                }
+            }
+        }
 
         function handleCellClick(r, c) {
             if (isGamePaused) return;
 
             const pieceCode = board[r][c];
-            const pieceColor = pieceCode ? (pieceCode === pieceCode.toUpperCase() ? 'W' : 'B') : null;
-
-            // 1. Select a piece of the current turn's color
+            const pieceColor = getPieceColor(pieceCode);
+            
+            // 1. Select/Deselect
             if (pieceColor === currentTurn) {
+                // If clicking the currently selected piece, deselect
+                if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+                    selectedCell = null;
+                    clearHighlights();
+                    renderBoard();
+                    return;
+                }
+                
+                // Select new piece
                 clearHighlights();
                 selectedCell = { r, c };
-                highlightValidMoves(pieceCode, r, c);
+                highlightValidMoves(r, c);
                 document.querySelector(`[data-r="${r}"][data-c="${c}"]`).classList.add('selected');
                 return;
             }
 
-            // 2. Move selected piece to target cell
+            // 2. Execute Move
             if (selectedCell) {
                 const startR = selectedCell.r;
                 const startC = selectedCell.c;
                 
-                // Simplified validation: Only allow moves to highlighted squares (which excludes own pieces)
                 const targetCellEl = document.querySelector(`[data-r="${r}"][data-c="${c}"]`);
+                
                 if (targetCellEl && targetCellEl.classList.contains('move-highlight')) {
                     
-                    // Execute Move
-                    board[r][c] = board[startR][startC];
-                    board[startR][startC] = null;
+                    const movingPiece = board[startR][startC];
                     
-                    // Reset selection
+                    // Check if this move corresponds to a castling action
+                    const legalMoves = getLegalMoves(startR, startC);
+                    const castlingMove = legalMoves.find(m => m.r === r && m.c === c && m.isCastling);
+
+                    if (castlingMove) {
+                        // Castling: Move King and Rook
+                        const rank = (currentTurn === 'W' ? 7 : 0);
+                        
+                        // 1. Move King
+                        board[r][c] = movingPiece;
+                        board[startR][startC] = null;
+                        
+                        // 2. Move Rook
+                        const rookPiece = board[rank][castlingMove.rookFrom];
+                        board[rank][castlingMove.rookTo] = rookPiece;
+                        board[rank][castlingMove.rookFrom] = null;
+                        
+                        // Update tracking variables
+                        updateHasMoved(startR, startC, movingPiece); 
+                        updateHasMoved(rank, castlingMove.rookFrom, rookPiece); 
+
+                    } else {
+                        // Standard Move
+                        board[r][c] = movingPiece;
+                        board[startR][startC] = null;
+                        
+                        // Update tracking variables for King/Rook movement
+                        updateHasMoved(startR, startC, movingPiece);
+                    }
+                    
                     selectedCell = null;
                     clearHighlights();
-                    
-                    // Next Turn & Rotate
                     switchTurn();
                     return;
                 }
             }
             
-            // 3. Deselect if clicking an invalid or empty space without a current selection
-            if (selectedCell && !pieceCode) {
+            // If we click an empty or opponent square without a valid move, deselect
+            if (selectedCell) {
                 selectedCell = null;
                 clearHighlights();
+                renderBoard();
             }
         }
         
@@ -432,16 +705,57 @@
             }
         }
 
+        function checkGameOver() {
+            let totalLegalMoves = 0;
+            const pieces = (currentTurn === 'W' ? ['P', 'R', 'N', 'B', 'Q', 'K'] : ['p', 'r', 'n', 'b', 'q', 'k']);
+            
+            // Calculate total legal moves for the current player
+            for (let r = 0; r < GRID_SIZE; r++) {
+                for (let c = 0; c < GRID_SIZE; c++) {
+                    if (pieces.includes(board[r][c])) {
+                        totalLegalMoves += getLegalMoves(r, c).length;
+                    }
+                }
+            }
+            
+            if (totalLegalMoves === 0) {
+                if (isKingInCheck(currentTurn)) {
+                    // Checkmate
+                    finalStatusEl.textContent = `${(currentTurn === 'W' ? 'Black' : 'White')} Wins by Checkmate!`;
+                } else {
+                    // Stalemate
+                    finalStatusEl.textContent = 'Stalemate (Draw)';
+                }
+                gameRunning = false;
+                isGamePaused = true;
+                gameOverScreenEl.style.display = 'flex';
+                return true;
+            }
+            return false;
+        }
+
         function switchTurn() {
+            // Switch player
             currentTurn = (currentTurn === 'W') ? 'B' : 'W';
             
+            // Update UI status
             turnIndicatorEl.textContent = (currentTurn === 'W') ? 'White' : 'Black';
             turnIndicatorEl.style.color = (currentTurn === 'W') ? '#f7f7f7' : '#333333';
             turnIndicatorEl.style.backgroundColor = (currentTurn === 'W') ? '#3c3f41' : '#e0e4cc';
             
+            // Check for game end conditions
+            if (checkGameOver()) {
+                checkStatusEl.textContent = '';
+                return;
+            }
+            
+            // Update Check Status
+            checkStatusEl.textContent = isKingInCheck(currentTurn) ? 'CHECK!' : '';
+            
+            // Rotate the board for the new player's perspective
             rotateBoard();
             
-            // Rerender after rotation to ensure piece counter-rotation is correctly applied via CSS
+            // Rerender the board, applying new highlights if needed
             renderBoard(); 
         }
 
@@ -449,19 +763,25 @@
             gameRunning = true;
             isGamePaused = false;
             
-            // Initial setup: White to move, board is NOT rotated (White pieces at the bottom/South)
             board = fenToBoard(STARTING_FEN);
             currentTurn = 'W';
             isBoardRotated = false; 
+            selectedCell = null; 
+            
+            // Reset castling eligibility
+            hasMoved = {
+                'W_K': false, 'B_K': false,
+                'W_R_0': false, 'W_R_7': false, 
+                'B_R_0': false, 'B_R_7': false  
+            };
             
             setupBoardSize();
             gameOverScreenEl.style.display = 'none';
             menuOverlayEl.style.display = 'none';
+            checkStatusEl.textContent = '';
             
-            // Set initial rotation state (no rotation)
             chessboardEl.classList.remove('board-rotated');
             
-            // Set initial turn indicator visually
             turnIndicatorEl.textContent = 'White';
             turnIndicatorEl.style.color = '#f7f7f7';
             turnIndicatorEl.style.backgroundColor = '#3c3f41';
@@ -472,9 +792,9 @@
         // --- Initial Setup ---
         window.onload = () => {
             setupBoardSize();
-            // Start the game loop, which will initially draw the board structure.
+            // Start with an empty board structure for initial rendering before startGame is called
+            board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
             renderBoard(); 
-            // Display menu
             menuOverlayEl.style.display = 'flex';
         };
 
