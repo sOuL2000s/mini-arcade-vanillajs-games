@@ -7,13 +7,13 @@
         :root {
             --grid-size: 8;
             --cell-size: 40px;
-            --pipe-color: #2c3e50;
-            --pipe-bg: #ecf0f1;
-            --start-color: #27ae60;
-            --end-color: #c0392b;
-            --path-color: #3498db;
-            --solved-path-color: #2ecc71;
-            --pipe-thickness: 8px;
+            --pipe-color: #34495e; /* Dark Blue */
+            --pipe-bg: #f5f5f5;    /* Light Gray */
+            --start-color: #2ecc71; /* Green */
+            --end-color: #e74c3c;   /* Red */
+            --solved-path-color: #3498db; /* Bright Blue path */
+            --pipe-thickness: 10px;
+            --half-thickness: 5px;
         }
 
         body {
@@ -21,10 +21,10 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            background-color: #f4f7f6;
+            background-color: #e8e8e8;
             margin: 0;
-            padding: 0;
-            height: 100vh;
+            padding: 20px 0;
+            min-height: 100vh;
             width: 100vw;
             overflow: auto; 
         }
@@ -42,17 +42,17 @@
             margin-bottom: 15px;
             padding: 10px;
             background: #fff;
-            border-radius: 5px;
-            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
         }
 
         #game-grid {
             display: grid;
             grid-template-columns: repeat(var(--grid-size), var(--cell-size));
             grid-template-rows: repeat(var(--grid-size), var(--cell-size));
-            border: 4px solid #34495e;
-            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.2);
-            transition: all 0.5s ease;
+            border: 4px solid #2c3e50;
+            box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
+            transition: all 0.3s ease;
             max-width: 90vw;
             max-height: 80vh;
         }
@@ -65,13 +65,8 @@
         @media (max-width: 450px) {
              :root {
                 --cell-size: 25px; 
-                --pipe-thickness: 6px;
-            }
-            h1 {
-                font-size: 1.5em;
-            }
-            #info-bar {
-                font-size: 0.9em;
+                --pipe-thickness: 5px;
+                --half-thickness: 2.5px;
             }
         }
 
@@ -79,14 +74,15 @@
             width: var(--cell-size);
             height: var(--cell-size);
             box-sizing: border-box;
-            border: 1px solid #bdc3c7;
+            border: 1px solid #ccc;
             background-color: var(--pipe-bg);
             position: relative;
             cursor: pointer;
-            transition: transform 0.2s ease-out, background-color 0.5s;
+            transition: background-color 0.2s;
+            overflow: hidden; /* Important for pipe visualization */
         }
         
-        /* --- MENU OVERLAY STYLES --- */
+        /* --- MENU OVERLAY STYLES (Kept for functionality) --- */
         #menu-overlay {
             position: fixed;
             top: 0;
@@ -103,13 +99,11 @@
             z-index: 600; 
             font-size: 1.5em;
         }
-
         #menu-overlay h2 {
             color: #3498db;
             font-size: 2.5em;
             margin-bottom: 20px;
         }
-
         #menu-overlay button {
             padding: 10px 20px;
             margin: 10px;
@@ -121,7 +115,6 @@
             border-radius: 5px;
             transition: background-color 0.2s;
         }
-        
         #instructions-box {
             margin-top: 20px;
             padding: 15px;
@@ -133,7 +126,7 @@
             display: none;
         }
         
-        /* ... Pipe visualization styles follow ... */
+        /* === NEW PIPE VISUALIZATION === */
 
         .pipe-visual {
             position: absolute;
@@ -141,10 +134,21 @@
             left: 0;
             width: 100%;
             height: 100%;
+            transform-origin: center center;
+            transition: transform 0.1s ease-out; /* Smooth rotation */
         }
-
+        
+        /* Base pipe structure using pseudo-element */
         .pipe-visual::before {
             content: '';
+            position: absolute;
+            background-color: var(--pipe-color);
+            z-index: 2;
+        }
+        
+        /* Central connection point (dot) */
+        .pipe-visual::after {
+             content: '';
             position: absolute;
             top: 50%;
             left: 50%;
@@ -153,55 +157,120 @@
             background-color: var(--pipe-color);
             transform: translate(-50%, -50%);
             border-radius: 50%;
-            z-index: 2;
+            z-index: 3;
         }
 
-        .cell[data-type="1"] .pipe-visual { 
-            border-left: var(--pipe-thickness) solid var(--pipe-color);
-            border-right: var(--pipe-thickness) solid var(--pipe-color);
-            transform: rotate(90deg); 
-        }
-        .cell[data-type="2"] .pipe-visual { 
-            border-top: var(--pipe-thickness) solid var(--pipe-color);
-            border-right: var(--pipe-thickness) solid var(--pipe-color);
-        }
-        .cell[data-type="3"] .pipe-visual { 
-            border-top: var(--pipe-thickness) solid var(--pipe-color);
-            border-right: var(--pipe-thickness) solid var(--pipe-color);
-            border-left: var(--pipe-thickness) solid var(--pipe-color);
-        }
-        .cell[data-type="4"] .pipe-visual { 
-            border: var(--pipe-thickness) solid var(--pipe-color);
+
+        /* 1. Straight Pipe (Type 1: N-S) */
+        .cell[data-type="1"] .pipe-visual::before { 
+            width: var(--pipe-thickness);
+            height: 100%;
+            left: 50%;
+            top: 0;
+            transform: translateX(-50%);
         }
 
-        .cell[data-rotation] .pipe-visual {
-            transform-origin: center center;
+        /* 2. Corner Pipe (Type 2: N-E) */
+        .cell[data-type="2"] .pipe-visual::before { 
+            /* L-shape defined by two segments: North and East */
+            width: var(--cell-size);
+            height: var(--cell-size);
+            top: 0;
+            left: 0;
+            background: none;
+            /* Box shadow creates the L shape */
+            box-shadow: 
+                /* North leg (half length, centered) */
+                0 calc(-1 * var(--half-thickness)) 0 0 var(--pipe-color),
+                /* East leg (full length, top aligned) */
+                var(--pipe-thickness) 0 0 0 var(--pipe-color),
+                /* The corner fill */
+                calc(var(--half-thickness) * -1) calc(var(--half-thickness) * -1) 0 0 var(--pipe-color);
+            
+            /* Important: Need to manually draw the two lines and join them,
+               Using two box shadows for the corner type */
+            width: var(--pipe-thickness);
+            height: var(--pipe-thickness);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            
+            /* Redefining L-shape using box shadow relative to the center dot */
+            box-shadow: 
+                /* North leg (Upwards) */
+                0 calc(-1 * var(--cell-size) / 2) 0 var(--half-thickness) var(--pipe-color),
+                /* East leg (Rightwards) */
+                calc(var(--cell-size) / 2) 0 0 var(--half-thickness) var(--pipe-color);
         }
+
+        /* 3. T-Junction Pipe (Type 3: N-E-S) */
+        .cell[data-type="3"] .pipe-visual::before { 
+            width: var(--pipe-thickness);
+            height: var(--pipe-thickness);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            /* Box shadow creates the T shape */
+            box-shadow: 
+                /* North leg (Upwards) */
+                0 calc(-1 * var(--cell-size) / 2) 0 var(--half-thickness) var(--pipe-color),
+                /* East leg (Rightwards) */
+                calc(var(--cell-size) / 2) 0 0 var(--half-thickness) var(--pipe-color),
+                /* South leg (Downwards) */
+                0 calc(var(--cell-size) / 2) 0 var(--half-thickness) var(--pipe-color);
+        }
+
+        /* 4. Cross Pipe (Type 4: N-E-S-W) */
+        .cell[data-type="4"] .pipe-visual::before { 
+            width: var(--pipe-thickness);
+            height: var(--pipe-thickness);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            /* Box shadow creates the X shape */
+            box-shadow: 
+                /* North leg */
+                0 calc(-1 * var(--cell-size) / 2) 0 var(--half-thickness) var(--pipe-color),
+                /* East leg */
+                calc(var(--cell-size) / 2) 0 0 var(--half-thickness) var(--pipe-color),
+                /* South leg */
+                0 calc(var(--cell-size) / 2) 0 var(--half-thickness) var(--pipe-color),
+                /* West leg */
+                calc(-1 * var(--cell-size) / 2) 0 0 var(--half-thickness) var(--pipe-color);
+        }
+
+        /* Handle Solved Path Colors */
+        .cell.on-path .pipe-visual::after {
+            background-color: var(--solved-path-color); /* Center dot color */
+        }
+        .cell.on-path[data-type="1"] .pipe-visual::before,
+        .cell.on-path[data-type="2"] .pipe-visual::before,
+        .cell.on-path[data-type="3"] .pipe-visual::before,
+        .cell.on-path[data-type="4"] .pipe-visual::before {
+             /* Use filter to change the color of the box-shadow generated pipe segments */
+             filter: hue-rotate(180deg) brightness(1.5) saturate(2); 
+             background-color: var(--solved-path-color);
+        }
+        
+        /* SPECIAL HANDLING for Straight Pipe (Type 1) which uses width/height instead of box-shadow */
+        .cell.on-path[data-type="1"] .pipe-visual::before { 
+             background-color: var(--solved-path-color);
+             filter: none;
+        }
+
 
         .cell.start {
             background-color: var(--start-color);
             border-color: var(--start-color);
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
         }
         .cell.end {
             background-color: var(--end-color);
             border-color: var(--end-color);
-            color: white;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            font-weight: bold;
         }
 
-        .cell.on-path .pipe-visual::before {
-            background-color: var(--solved-path-color);
-        }
-        .cell.on-path[data-type] .pipe-visual {
-            filter: hue-rotate(120deg) brightness(1.2); 
+        /* Ensure S and E cells also get the visual path color when solved */
+        .cell.on-path.start, .cell.on-path.end {
+            background-color: var(--solved-path-color); 
         }
 
         .message {
@@ -234,7 +303,7 @@
         Puzzle Solved! Generating next level...
     </div>
     
-    <!-- NEW MENU OVERLAY -->
+    <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Circuit Flow</h2>
         <button id="btn-start" onclick="resumeGame()">Start Puzzle</button>
@@ -258,23 +327,23 @@
         let grid = [];
         let startCell = { r: 0, c: 0 };
         let endCell = { r: 0, c: 0 };
-        let isGamePaused = true; // Start paused
+        let isGamePaused = true; 
         const GRID_CONTAINER = document.getElementById('game-grid');
         
         // Pipe Connections: [N, E, S, W] 
         const PIPE_MAP = {
-            0: { id: 0, connections: [false, false, false, false], css: 'pipe-block' },
-            1: { id: 1, connections: [true, false, true, false], css: 'pipe-straight' },
-            2: { id: 2, connections: [true, true, false, false], css: 'pipe-corner' },
-            3: { id: 3, connections: [true, true, true, false], css: 'pipe-t-junction' },
-            4: { id: 4, connections: [true, true, true, true], css: 'pipe-cross' }
+            0: { id: 0, connections: [false, false, false, false] },
+            1: { id: 1, connections: [true, false, true, false] }, // N-S straight
+            2: { id: 2, connections: [true, true, false, false] },  // N-E corner
+            3: { id: 3, connections: [true, true, true, false] }, // N-E-S T-junction
+            4: { id: 4, connections: [true, true, true, true] } // N-E-S-W cross
         };
 
         const DIRS = [
-            { r: -1, c: 0, index: 0, opposite: 2 }, // North
-            { r: 0, c: 1, index: 1, opposite: 3 },  // East
-            { r: 1, c: 0, index: 2, opposite: 0 },  // South
-            { r: 0, c: -1, index: 3, opposite: 1 }   // West
+            { r: -1, c: 0, index: 0, opposite: 2 }, // 0: North
+            { r: 0, c: 1, index: 1, opposite: 3 },  // 1: East
+            { r: 1, c: 0, index: 2, opposite: 0 },  // 2: South
+            { r: 0, c: -1, index: 3, opposite: 1 }   // 3: West
         ];
         
         // Menu Elements
@@ -317,6 +386,7 @@
         }
 
         function getCurrentConnections(cell) {
+            if (cell.type === 0) return [false, false, false, false];
             const baseConnections = PIPE_MAP[cell.type].connections;
             return rotateConnections(baseConnections, cell.rotation);
         }
@@ -329,9 +399,8 @@
             return r >= 0 && r < GRID_SIZE && c >= 0 && c < GRID_SIZE;
         }
 
-        // --- GENERATION LOGIC ---
+        // --- GENERATION LOGIC (Retained for Stability) ---
         function generatePuzzle() {
-            // ... (Generation logic remains the same) ...
             grid = [];
             moves = 0;
             
@@ -363,7 +432,7 @@
             let pathLength = 0;
             grid[currentR][currentC].isPath = true;
 
-            const pathHistory = [{ r: currentR, c: currentC }];
+            const pathHistory = [{ r: currentR, c: currentC, entryDir: -1, exitDir: -1 }];
             const minPathLength = Math.floor(GRID_SIZE * 1.5);
             
             while (currentR !== endCell.r || currentC !== endCell.c) {
@@ -378,6 +447,8 @@
                         const distB = Math.hypot(endCell.r - (currentR + b.dir.r), endCell.c - (currentC + b.dir.c));
                         return distA - distB;
                     });
+                } else {
+                    potentialMoves.sort(() => Math.random() - 0.5);
                 }
                 
                 let nextMove = null;
@@ -388,71 +459,74 @@
                     if (grid[nextR][nextC].isPath && (nextR !== endCell.r || nextC !== endCell.c)) {
                         continue;
                     }
-
+                    
                     nextMove = move;
                     break;
                 }
 
                 if (!nextMove) {
-                    break;
+                    generatePuzzle(); 
+                    return;
                 }
 
-                const { dir: chosenDir, index: exitDirIndex } = nextMove;
-                const nextR = currentR + chosenDir.r;
-                const nextC = currentC + chosenDir.c;
+                const { index: exitDirIndex } = nextMove;
+                const nextR = currentR + nextMove.dir.r;
+                const nextC = currentC + nextMove.dir.c;
                 
-                const prevCell = pathHistory[pathHistory.length - 1];
-                let prevDirIndex = -1;
+                const entryDirIndex = DIRS[exitDirIndex].opposite; 
                 
-                if (pathHistory.length > 0) {
-                    for(let i=0; i<4; i++) {
-                        if (prevCell.r + DIRS[i].r === currentR && prevCell.c + DIRS[i].c === currentC) {
-                            prevDirIndex = i;
-                            break;
-                        }
-                    }
-                }
-
                 let pipeType;
                 let finalRotation = 0;
                 
                 if (pathHistory.length === 1) { 
                     pipeType = 1; 
-                    if (exitDirIndex === 1) finalRotation = 0; 
-                    else if (exitDirIndex === 3) finalRotation = 2; 
-                    else if (exitDirIndex === 0) finalRotation = 3; 
-                    else if (exitDirIndex === 2) finalRotation = 1; 
-                    
-                } else if (nextR === endCell.r && nextC === endCell.c) { 
-                    pipeType = 1;
-                    if (prevDirIndex === 1) finalRotation = 0; 
-                    else if (prevDirIndex === 3) finalRotation = 2; 
-                    else if (prevDirIndex === 0) finalRotation = 3; 
-                    else if (prevDirIndex === 2) finalRotation = 1; 
-                } else {
-                    pipeType = 2; 
+                    const requiredConnectionIndex = exitDirIndex;
                     let attempts = 0;
                     while(attempts < 4) {
-                        const connections = rotateConnections(PIPE_MAP[2].connections, attempts);
-                        if (connections[DIRS[prevDirIndex].opposite] && connections[exitDirIndex]) {
-                            pipeType = 2;
+                        const connections = rotateConnections(PIPE_MAP[pipeType].connections, attempts);
+                        if (connections[requiredConnectionIndex]) {
                             finalRotation = attempts;
                             break;
                         }
                         attempts++;
                     }
+
+                } else if (nextR === endCell.r && nextC === endCell.c) { 
+                    pipeType = 1;
+                    const requiredConnectionIndex = entryDirIndex; 
+                    let attempts = 0;
+                    while(attempts < 4) {
+                        const connections = rotateConnections(PIPE_MAP[pipeType].connections, attempts);
+                        if (connections[requiredConnectionIndex]) {
+                            finalRotation = attempts;
+                            break;
+                        }
+                        attempts++;
+                    }
+                } else {
+                    const requiredEntryIndex = entryDirIndex;
                     
-                    if (attempts === 4) {
-                         pipeType = 3;
-                         attempts = 0;
-                         while(attempts < 4) {
-                            const connections = rotateConnections(PIPE_MAP[3].connections, attempts);
-                            if (connections[DIRS[prevDirIndex].opposite] && connections[exitDirIndex]) {
+                    let foundType = false;
+                    const pipeTypesToTry = [2, 3, 4, 1]; 
+
+                    for (const typeId of pipeTypesToTry) {
+                        let attempts = 0;
+                        while(attempts < 4) {
+                            const connections = rotateConnections(PIPE_MAP[typeId].connections, attempts);
+                            if (connections[requiredEntryIndex] && connections[exitDirIndex]) {
+                                pipeType = typeId;
                                 finalRotation = attempts;
+                                foundType = true;
                                 break;
                             }
                             attempts++;
                         }
+                        if (foundType) break;
+                    }
+                    
+                    if (!foundType) {
+                        pipeType = 4;
+                        finalRotation = 0;
                     }
                 }
                 
@@ -462,124 +536,109 @@
                 currentR = nextR;
                 currentC = nextC;
                 grid[currentR][currentC].isPath = true;
-                pathHistory.push({ r: currentR, c: currentC });
+                
+                pathHistory.push({ r: currentR, c: currentC, entryDir: entryDirIndex, exitDir: exitDirIndex });
                 pathLength++;
             }
             
+            // Scramble the grid
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
                     const cell = grid[r][c];
-                    if (!cell.isPath) {
-                        cell.type = getRandomInt(3) + 1; 
-                        cell.initialPathRotation = getRandomInt(4);
-                    }
                     
                     if ((r === startCell.r && c === startCell.c) || (r === endCell.r && c === endCell.c)) {
-                         // Skip start/end markers
-                    } else if(cell.isPath) {
-                        cell.rotation = getRandomInt(4);
+                        cell.type = 0; 
                     } else {
+                        if (!cell.isPath) {
+                            cell.type = getRandomInt(4) + 1; 
+                            cell.initialPathRotation = getRandomInt(4);
+                        }
                         cell.rotation = getRandomInt(4);
                     }
                 }
             }
             
-            grid[startCell.r][startCell.c].type = 0; 
-            grid[endCell.r][endCell.c].type = 0;
-
             renderGrid();
         }
 
-        // --- VALIDATION LOGIC (Path Tracing) ---
+        // --- VALIDATION LOGIC (Path Tracing - Unchanged from last fix) ---
         
         function checkWin() {
             if (isGamePaused) return false;
-            // ... (rest of checkWin logic remains the same) ...
             
             const visited = new Set();
-            const pathCells = [];
+            let pathCells = []; 
             
             const startR = startCell.r;
             const startC = startCell.c;
+            const endR = endCell.r;
+            const endC = endCell.c;
             
-            let requiredExitDirIndex = -1;
-            for(let i=0; i<DIRS.length; i++) {
+            let traceQueue = [];
+            
+            // 1. Initialize the trace from the Start (S) cell
+            for (let i = 0; i < DIRS.length; i++) {
                 const neighborR = startR + DIRS[i].r;
                 const neighborC = startC + DIRS[i].c;
-                if (isInsideGrid(neighborR, neighborC) && grid[neighborR][neighborC].isPath && (neighborR !== endCell.r || neighborC !== endCell.c)) {
-                    requiredExitDirIndex = i;
-                    break;
+                
+                if (isInsideGrid(neighborR, neighborC)) {
+                    const neighborCell = grid[neighborR][neighborC];
+                    
+                    const entryDir = DIRS[i].opposite; 
+                    const connections = getCurrentConnections(neighborCell);
+                    
+                    if (connections[entryDir]) {
+                        traceQueue.push({ r: neighborR, c: neighborC, entryDir: entryDir });
+                        visited.add(`${neighborR},${neighborC}`);
+                        pathCells.push(neighborCell);
+                    }
                 }
             }
             
-            if (requiredExitDirIndex === -1) return false;
-
-            let traceR = startR + DIRS[requiredExitDirIndex].r;
-            let traceC = startC + DIRS[requiredExitDirIndex].c;
-            let entryDir = DIRS[requiredExitDirIndex].opposite; 
-            
-            const traceQueue = [{ r: traceR, c: traceC, entryDir: entryDir }];
-            visited.add(`${traceR},${traceC}`);
-            pathCells.push(grid[traceR][traceC]);
-            
             let successfulTrace = false;
 
+            // 2. Trace the path using BFS
             while (traceQueue.length > 0) {
                 const { r, c, entryDir: currentEntryDir } = traceQueue.shift();
                 const cell = grid[r][c];
                 
-                if (r === endCell.r && c === endCell.c) {
+                if (r === endR && c === endC) {
                     successfulTrace = true;
                     break; 
                 }
-                
-                if (!cell.isPath) break;
 
                 const connections = getCurrentConnections(cell);
+                if (!connections[currentEntryDir]) continue; 
 
-                if (!connections[currentEntryDir]) {
-                    break;
-                }
-
-                let exitDirIndex = -1;
                 for (let i = 0; i < 4; i++) {
                     if (i !== currentEntryDir && connections[i]) {
-                        exitDirIndex = i;
-                        break;
-                    }
-                }
+                        
+                        const nextR = r + DIRS[i].r;
+                        const nextC = c + DIRS[i].c;
+                        
+                        if (!isInsideGrid(nextR, nextC)) continue;
 
-                if (exitDirIndex === -1) {
-                    break;
-                }
-
-                const nextR = r + DIRS[exitDirIndex].r;
-                const nextC = c + DIRS[exitDirIndex].c;
-                
-                if (isInsideGrid(nextR, nextC)) {
-                    const nextCell = grid[nextR][nextC];
-                    const requiredEntryIndex = DIRS[exitDirIndex].opposite;
-
-                    const nextConnections = getCurrentConnections(nextCell);
-                    
-                    if (nextR === endCell.r && nextC === endCell.c) {
-                        successfulTrace = true;
-                        break;
-                    }
-                    
-                    if (nextConnections[requiredEntryIndex]) {
-                        if (!visited.has(`${nextR},${nextC}`)) {
+                        const nextCell = grid[nextR][nextC];
+                        const requiredEntryIndex = DIRS[i].opposite; 
+                        
+                        if (nextR === endR && nextC === endC) {
+                            successfulTrace = true;
+                            break; 
+                        }
+                        
+                        const nextConnections = getCurrentConnections(nextCell);
+                        
+                        if (nextConnections[requiredEntryIndex] && !visited.has(`${nextR},${nextC}`)) {
                             visited.add(`${nextR},${nextC}`);
                             pathCells.push(nextCell);
                             traceQueue.push({ r: nextR, c: nextC, entryDir: requiredEntryIndex });
                         }
-                    } else {
-                        break; 
                     }
-                } else {
-                    break; 
                 }
+                if (successfulTrace) break; 
             }
+            
+            // 3. Update UI based on result
             
             document.querySelectorAll('.cell').forEach(el => el.classList.remove('on-path'));
 
@@ -587,6 +646,9 @@
                 score++;
                 document.getElementById('score-display').textContent = score;
                 document.getElementById('message').style.display = 'block';
+                
+                document.getElementById(`cell-${startR}-${startC}`).classList.add('on-path');
+                document.getElementById(`cell-${endR}-${endC}`).classList.add('on-path');
                 
                 pathCells.forEach(cell => {
                     const el = document.getElementById(`cell-${cell.r}-${cell.c}`);
@@ -618,8 +680,8 @@
             const element = document.getElementById(`cell-${r}-${c}`);
             if (element) {
                 const pipeVisual = element.querySelector('.pipe-visual');
+                element.classList.remove('on-path');
                 pipeVisual.style.transform = `rotate(${cell.rotation * 90}deg)`;
-                element.classList.remove('on-path'); 
             }
 
             checkWin();

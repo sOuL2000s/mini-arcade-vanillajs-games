@@ -12,7 +12,7 @@
         margin: 0;
         overflow: hidden;
         background-color: #111;
-        font-family: monospace;
+        font-family: 'Consolas', monospace;
         color: white;
         display: flex;
         justify-content: center;
@@ -42,14 +42,23 @@
         box-sizing: border-box;
         text-shadow: 0 0 5px black;
         z-index: 10;
+        font-size: 1.1em;
     }
+    /* Style for the lives display */
+    #lives-display {
+        color: #A3BE8C;
+        font-weight: bold;
+        margin-left: 10px;
+        letter-spacing: 2px;
+    }
+    
     #game-over-screen {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.8);
+        background-color: rgba(0, 0, 0, 0.85);
         display: none;
         flex-direction: column;
         justify-content: center;
@@ -60,32 +69,39 @@
     }
     #game-over-screen h1 {
         color: #ff4444;
-        font-size: 3em;
+        font-size: 3.5em;
         margin-bottom: 0.5em;
+        animation: pulse 1.5s infinite;
+    }
+    @keyframes pulse {
+        0% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+        100% { transform: scale(1); }
     }
     #restart-button {
-        padding: 10px 20px;
-        margin-top: 20px;
-        font-size: 1.2em;
+        padding: 12px 25px;
+        margin-top: 30px;
+        font-size: 1.4em;
         cursor: pointer;
         background-color: #4CAF50;
         color: white;
         border: none;
         border-radius: 5px;
-        transition: background-color 0.3s;
+        transition: background-color 0.3s, transform 0.1s;
     }
     #restart-button:hover {
         background-color: #45a049;
+        transform: scale(1.05);
     }
     
-    /* --- NEW MENU STYLES --- */
+    /* Menu Styles */
     #menu-overlay {
         position: absolute;
         top: 0;
         left: 0;
         width: 100%;
         height: 100%;
-        background-color: rgba(0, 0, 0, 0.95);
+        background-color: rgba(0, 0, 0, 0.98);
         color: white;
         display: flex; 
         flex-direction: column;
@@ -97,40 +113,60 @@
     }
     #menu-overlay h2 {
         color: #88C0D0;
-        font-size: 2.5em;
-        margin-bottom: 20px;
+        font-size: 3em;
+        margin-bottom: 30px;
+        text-shadow: 0 0 10px #88C0D0;
     }
     #menu-overlay button {
-        padding: 10px 20px;
+        padding: 15px 30px;
         margin: 10px;
-        font-size: 1em;
+        font-size: 1.2em;
         cursor: pointer;
         background-color: #88C0D0;
         color: #000;
         border: none;
         border-radius: 5px;
-        transition: background-color 0.3s;
+        transition: background-color 0.3s, transform 0.1s;
+    }
+    #menu-overlay button:hover {
+        background-color: #A3BE8C;
+        transform: scale(1.05);
     }
     #instructions-box {
-        margin-top: 20px;
-        padding: 15px;
-        background: rgba(255, 255, 255, 0.1);
-        border-radius: 5px;
+        margin-top: 25px;
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.15);
+        border-radius: 8px;
         max-width: 80%;
-        font-size: 0.7em;
+        font-size: 0.6em;
         text-align: left;
+        display: none;
+        border-left: 5px solid #88C0D0;
+    }
+    #paused-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 3em;
+        color: rgba(255, 255, 255, 0.5);
+        pointer-events: none;
         display: none;
     }
 </style>
 
 <div id="game-container">
     <div id="ui-overlay">
-        Score: <span id="score-display">0</span> ms | Bullets: <span id="bullet-count">0</span>
-        <div style="float: right;">Movement: WASD / Arrows</div>
+        Time: <span id="score-display">0</span> ms 
+        | Difficulty: <span id="difficulty-display">1.00</span>x
+        | Lives: <span id="lives-display">3</span>
     </div>
+    
+    <div id="paused-text">PAUSED</div>
+
     <canvas id="gameCanvas"></canvas>
     
-    <!-- NEW MENU OVERLAY -->
+    <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Starfall Dodgem</h2>
         <button id="btn-start" onclick="startGame()">Start Dodging</button>
@@ -138,10 +174,11 @@
         <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
         <div id="instructions-box">
             <h3>Controls & Goal:</h3>
-            <p><strong>Goal:</strong> Survive for the longest time possible.</p>
+            <p><strong>Goal:</strong> Survive the ever-increasing storm of bullets!</p>
+            <p><strong>Lives:</strong> You start with 3 lives. If hit, you gain 1.5 seconds of invulnerability.</p>
             <p><strong>Movement:</strong> WASD or Arrow Keys.</p>
-            <p>The difficulty multiplier continuously increases, making bullets faster and spawn more aggressively.</p>
-            <p>Press ESC to pause/resume the game.</p>
+            <p>The **Difficulty Multiplier** increases over time, making bullets faster and spawn more frequently.</p>
+            <p>Press **ESC** to pause/resume the game at any time.</p>
         </div>
     </div>
 
@@ -157,13 +194,14 @@
     // --- Configuration ---
     let CANVAS_WIDTH;
     let CANVAS_HEIGHT;
+    const INVULNERABILITY_DURATION = 90; // 1.5 seconds at 60 FPS
 
     // --- Game State Variables ---
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     
     let gameRunning = false;
-    let isGamePaused = true; // Start paused
+    let isGamePaused = true; 
     let startTime;
     let score = 0;
     let frameCounter = 0;
@@ -173,22 +211,32 @@
         x: 0, 
         y: 0,
         radius: 8,
-        speed: 4,
-        color: '#88C0D0'
+        speed: 4.5,
+        color: '#88C0D0',
+        pulseRadius: 0,
+        pulseAlpha: 0,
+        currentLives: 3,        // NEW: Current lives
+        maxLives: 3,
+        invulnerabilityFrames: 0 // NEW: I-frames counter
     };
 
     let bullets = [];
+    let backgroundStars = [];
+    const NUM_STARS = 100;
+
     const bulletBaseRadius = 3;
     const bulletBaseSpeed = 3.5;
     const keys = {};
 
     // --- UI Elements ---
     const scoreDisplay = document.getElementById('score-display');
-    const bulletCountDisplay = document.getElementById('bullet-count');
+    const difficultyDisplay = document.getElementById('difficulty-display');
+    const livesDisplay = document.getElementById('lives-display'); // NEW
     const gameOverScreen = document.getElementById('game-over-screen');
     const finalScoreDisplay = document.getElementById('final-score');
     const finalDifficultyDisplay = document.getElementById('final-difficulty');
     const restartButton = document.getElementById('restart-button');
+    const pausedText = document.getElementById('paused-text');
     
     // Menu Elements
     const MENU_OVERLAY = document.getElementById('menu-overlay');
@@ -196,19 +244,34 @@
     const BTN_RESUME = document.getElementById('btn-resume');
     const BTN_START = document.getElementById('btn-start'); 
 
-    // --- Dynamic Sizing and Menu Logic ---
+    // --- Initialization & Setup ---
     
+    function initStars() {
+        backgroundStars = [];
+        for (let i = 0; i < NUM_STARS; i++) {
+            backgroundStars.push({
+                x: Math.random() * CANVAS_WIDTH,
+                y: Math.random() * CANVAS_HEIGHT,
+                radius: Math.random() * 1.5 + 0.5,
+                speedY: Math.random() * 0.5 + 0.2
+            });
+        }
+    }
+
     function resizeCanvas() {
         CANVAS_WIDTH = window.innerWidth;
         CANVAS_HEIGHT = window.innerHeight;
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT;
         
-        // Re-center player 
         player.x = CANVAS_WIDTH / 2;
         player.y = CANVAS_HEIGHT / 2;
+        
+        initStars();
     }
     window.addEventListener('resize', resizeCanvas);
+    
+    // --- Menu Control ---
 
     function toggleInstructions() {
         INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
@@ -218,6 +281,7 @@
         if (!gameRunning) return;
         isGamePaused = false;
         MENU_OVERLAY.style.display = 'none';
+        pausedText.style.display = 'none';
         requestAnimationFrame(gameLoop);
     }
 
@@ -227,6 +291,7 @@
         MENU_OVERLAY.style.display = 'flex';
         BTN_START.style.display = 'none';
         BTN_RESUME.style.display = 'block'; 
+        pausedText.style.display = 'block';
         INSTRUCTIONS_BOX.style.display = 'none';
     }
 
@@ -234,12 +299,14 @@
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') {
             e.preventDefault();
-            gameRunning && (isGamePaused ? resumeGame() : pauseGame());
+            if (gameRunning && gameOverScreen.style.display === 'none') {
+                isGamePaused ? resumeGame() : pauseGame();
+            }
             return;
         }
         if (gameRunning && !isGamePaused) {
-            keys[e.key] = true;
-            if (['w', 'a', 's', 'd', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key.toLowerCase())) {
+            keys[e.key.toLowerCase()] = true;
+            if (['w', 'a', 's', 'd', 'arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(e.key.toLowerCase())) {
                 e.preventDefault();
             }
         }
@@ -247,7 +314,7 @@
 
     document.addEventListener('keyup', (e) => {
         if (gameRunning) {
-            keys[e.key] = false;
+            keys[e.key.toLowerCase()] = false;
         }
     });
 
@@ -268,12 +335,21 @@
         frameCounter = 0;
         difficultyMultiplier = 1.0;
         startTime = performance.now();
+        
+        // Lives Reset
+        player.currentLives = player.maxLives;
+        player.invulnerabilityFrames = 0;
 
         gameOverScreen.style.display = 'none';
         MENU_OVERLAY.style.display = 'none';
+        pausedText.style.display = 'none';
 
         gameRunning = true;
         isGamePaused = false;
+
+        for (let key in keys) {
+            keys[key] = false;
+        }
 
         requestAnimationFrame(gameLoop);
     }
@@ -281,15 +357,16 @@
     function endGame() {
         gameRunning = false;
         isGamePaused = true;
+        
+        // This ensures the current loop stops after calling endGame
+        cancelAnimationFrame(gameLoop); 
+
         const totalSurvivalTime = Math.floor(performance.now() - startTime);
         
         finalScoreDisplay.textContent = totalSurvivalTime;
         finalDifficultyDisplay.textContent = difficultyMultiplier.toFixed(2);
         
         gameOverScreen.style.display = 'flex';
-        for (let key in keys) {
-            keys[key] = false;
-        }
     }
 
     // --- Update Logic ---
@@ -298,12 +375,13 @@
         let dx = 0;
         let dy = 0;
 
-        // Check WASD or Arrow Keys
-        if (keys['w'] || keys['W'] || keys['ArrowUp']) dy -= player.speed;
-        if (keys['s'] || keys['S'] || keys['ArrowDown']) dy += player.speed;
-        if (keys['a'] || keys['A'] || keys['ArrowLeft']) dx -= player.speed;
-        if (keys['d'] || keys['D'] || keys['ArrowRight']) dx += player.speed;
+        // Key checks
+        if (keys['w'] || keys['arrowup']) dy -= player.speed;
+        if (keys['s'] || keys['arrowdown']) dy += player.speed;
+        if (keys['a'] || keys['arrowleft']) dx -= player.speed;
+        if (keys['d'] || keys['arrowright']) dx += player.speed;
 
+        // Diagonal normalization
         if (dx !== 0 && dy !== 0) {
             const magnitude = Math.sqrt(dx * dx + dy * dy);
             dx = (dx / magnitude) * player.speed;
@@ -312,6 +390,17 @@
 
         player.x += dx;
         player.y += dy;
+        
+        // Handle Invulnerability Timer
+        if (player.invulnerabilityFrames > 0) {
+            player.invulnerabilityFrames--;
+        }
+
+        // Update player pulse
+        player.pulseRadius = player.radius + Math.sin(frameCounter * 0.1) * (difficultyMultiplier * 2);
+        player.pulseAlpha = 0.5 - (difficultyMultiplier * 0.05);
+        if (player.pulseAlpha < 0.1) player.pulseAlpha = 0.1;
+
 
         // Keep player within bounds
         player.x = Math.max(player.radius, Math.min(CANVAS_WIDTH - player.radius, player.x));
@@ -330,8 +419,23 @@
             const dist = Math.hypot(player.x - bullet.x, player.y - bullet.y);
             
             if (dist < player.radius + bullet.radius) {
-                endGame();
-                return; 
+                // If hit, check if vulnerable
+                if (player.invulnerabilityFrames <= 0) {
+                    player.currentLives--;
+                    bullets.splice(i, 1); // Remove the bullet that caused the hit
+                    
+                    if (player.currentLives <= 0) {
+                        endGame();
+                        return; // Stop update if game over
+                    } else {
+                        // Activate I-frames
+                        player.invulnerabilityFrames = INVULNERABILITY_DURATION;
+                    }
+                } else {
+                    // Player is currently invincible, ignore collision
+                    // We still remove the bullet if it hits, to clear the screen slightly
+                    bullets.splice(i, 1);
+                }
             }
 
             // Remove bullets far outside the screen bounds
@@ -343,10 +447,21 @@
             }
         }
     }
+    
+    function updateStars() {
+        for (const star of backgroundStars) {
+            star.y += star.speedY * difficultyMultiplier * 0.5;
+            if (star.y > CANVAS_HEIGHT) {
+                star.y = 0; 
+                star.x = Math.random() * CANVAS_WIDTH;
+            }
+        }
+    }
+
 
     function updateDifficulty() {
         const elapsedSeconds = (performance.now() - startTime) / 1000;
-        difficultyMultiplier = 1.0 + (elapsedSeconds / 5) * 0.15;
+        difficultyMultiplier = 1.0 + (elapsedSeconds / 3) * 0.2; 
     }
 
     function spawnBullet(startX, startY, angleRadians) {
@@ -355,7 +470,7 @@
         bullets.push({
             x: startX,
             y: startY,
-            radius: bulletBaseRadius,
+            radius: bulletBaseRadius + (difficultyMultiplier * 0.5),
             dx: Math.cos(angleRadians) * speed,
             dy: Math.sin(angleRadians) * speed,
             color: '#FF4444' 
@@ -365,17 +480,20 @@
     function spawnPatterns() {
         const center = { x: CANVAS_WIDTH / 2, y: CANVAS_HEIGHT / 2 };
         
-        const spawnRate = Math.max(1, Math.floor(6 / difficultyMultiplier));
+        const spawnRate = Math.max(1, Math.floor(6 / difficultyMultiplier)); 
 
         if (frameCounter % spawnRate !== 0) return;
 
-        if ((frameCounter % 360) < 180) {
+        // Pattern 1: Spiral from center 
+        if (difficultyMultiplier > 1.5 && (frameCounter % 120) < 60) {
             const spiralAngle = (frameCounter * 0.1) % (2 * Math.PI);
             
-            for (let i = 0; i < 3; i++) {
-                spawnBullet(center.x, center.y, spiralAngle + i * 0.1);
+            for (let i = 0; i < 4; i++) {
+                spawnBullet(center.x, center.y, spiralAngle + i * 0.1 - 0.15);
             }
         }
+        
+        // Pattern 2: Corner shots aiming at player
         else {
             let spawnX, spawnY;
             if (frameCounter % 4 === 0) {
@@ -396,16 +514,50 @@
     }
 
     // --- Drawing Functions ---
+    
+    function drawStars() {
+        ctx.fillStyle = '#FFF';
+        for (const star of backgroundStars) {
+            ctx.globalAlpha = star.radius / 2;
+            ctx.beginPath();
+            ctx.arc(star.x, star.y, star.radius, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        ctx.globalAlpha = 1; 
+    }
+
 
     function draw() {
+        // 1. Background
         ctx.fillStyle = '#000';
         ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+        
+        // 2. Stars
+        drawStars();
 
+        // 3. Player Pulse (Visual difficulty warning)
+        ctx.strokeStyle = `rgba(136, 192, 208, ${player.pulseAlpha})`; 
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(player.x, player.y, player.pulseRadius, 0, Math.PI * 2);
+        ctx.stroke();
+
+        // 4. Player (Handling Invincibility Flash)
+        if (player.invulnerabilityFrames > 0) {
+            // Flash effect: make the player briefly invisible every 5 frames
+            if (frameCounter % 5 < 3) {
+                 ctx.globalAlpha = 0.4; // Semi-transparent flash
+            }
+        }
+        
         ctx.beginPath();
         ctx.arc(player.x, player.y, player.radius, 0, Math.PI * 2);
         ctx.fillStyle = player.color;
         ctx.fill();
         
+        ctx.globalAlpha = 1; // Reset alpha for everything else
+
+        // 5. Bullets
         ctx.fillStyle = '#FF4444'; 
         for (const bullet of bullets) {
             ctx.beginPath();
@@ -417,10 +569,18 @@
     function updateUI() {
         score = Math.floor(performance.now() - startTime);
         scoreDisplay.textContent = score;
-        bulletCountDisplay.textContent = bullets.length;
+        difficultyDisplay.textContent = difficultyMultiplier.toFixed(2);
+        
+        // Update Lives Display: Show green hearts/stars based on current lives
+        let livesText = "";
+        for (let i = 0; i < player.currentLives; i++) {
+            livesText += "★ "; // Green star/heart symbol
+        }
+        livesDisplay.textContent = livesText.trim();
     }
 
     // --- Main Loop ---
+    let animationFrameId;
 
     function gameLoop(timestamp) {
         if (!gameRunning) return;
@@ -428,8 +588,9 @@
         if (!isGamePaused) { 
             frameCounter++;
             
-            updatePlayer();
             updateDifficulty();
+            updateStars();
+            updatePlayer();
             spawnPatterns();
             updateBullets(); 
             updateUI();
@@ -437,7 +598,10 @@
         
         draw();
 
-        requestAnimationFrame(gameLoop);
+        // Request next frame only if game is running (prevents unnecessary loops when fully paused)
+        if (gameRunning) {
+             animationFrameId = requestAnimationFrame(gameLoop);
+        }
     }
 
     // Initialize the game structure

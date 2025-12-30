@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>The Pixel Dash</title>
+    <title>The Pixel Dash: Hardcore Edition</title>
     <style>
         /* Global Styles */
         body {
@@ -28,7 +28,23 @@
             position: relative;
             overflow: hidden;
             cursor: pointer;
+            /* Added for screen shake effect */
+            transition: transform 0.05s ease-out;
         }
+        
+        /* Screen Shake Animation */
+        .shake {
+            animation: shake 0.3s cubic-bezier(.36,.07,.19,.97) both;
+            transform: translate3d(0, 0, 0);
+        }
+        @keyframes shake {
+            10%, 90% { transform: translate3d(-1px, 0, 0); }
+            20%, 80% { transform: translate3d(+2px, 0, 0); }
+            30%, 70% { transform: translate3d(-4px, 0, 0); }
+            40%, 60% { transform: translate3d(+4px, 0, 0); }
+            50% { transform: translate3d(-4px, 0, 0); }
+        }
+
 
         /* Ground Styling */
         #ground {
@@ -52,6 +68,15 @@
             z-index: 10;
             transition: background-color 0.1s;
         }
+        
+        /* Invulnerability Flash Effect */
+        .hit {
+            animation: flash 0.1s infinite alternate;
+        }
+        @keyframes flash {
+            from { opacity: 1; }
+            to { opacity: 0.2; }
+        }
 
         /* Score Display */
         #score-display {
@@ -62,6 +87,19 @@
             font-weight: bold;
             color: #333;
             text-shadow: 1px 1px 0 #fff;
+            z-index: 10;
+        }
+        
+        /* NEW: Lives Display */
+        #lives-display {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            font-size: 1.5em;
+            font-weight: bold;
+            color: #cc0000;
+            text-shadow: 1px 1px 0 #fff;
+            z-index: 10;
         }
 
         /* Game Over Screen */
@@ -71,7 +109,7 @@
             left: 0;
             width: 100%;
             height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
+            background-color: rgba(0, 0, 0, 0.85);
             color: white;
             display: none;
             flex-direction: column;
@@ -79,9 +117,12 @@
             align-items: center;
             text-align: center;
             z-index: 20;
+            font-size: 1.2em;
         }
         #game-over-screen h2 {
             margin-bottom: 5px;
+            color: #ff4500;
+            font-size: 3em;
         }
         #game-over-screen button {
             padding: 10px 20px;
@@ -125,8 +166,8 @@
         }
 
         #menu-overlay h2 {
-            color: #87ceeb;
-            font-size: 2.5em;
+            color: #ff4500;
+            font-size: 3.5em;
             margin-bottom: 20px;
         }
 
@@ -160,10 +201,11 @@
         <div id="ground"></div>
         <div id="player"></div>
         <div id="score-display">Score: 0.00s</div>
+        <div id="lives-display">Lives: ❤️❤️❤️</div> <!-- NEW HUD ELEMENT -->
 
         <!-- NEW MENU OVERLAY -->
         <div id="menu-overlay">
-            <h2>The Pixel Dash</h2>
+            <h2>The Pixel Dash: Hardcore</h2>
             <button id="btn-start" onclick="startGame()">Start Dash</button>
             <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
             <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -171,6 +213,7 @@
                 <h3>Controls & Goal:</h3>
                 <p><strong>Goal:</strong> Survive by jumping over obstacles.</p>
                 <p><strong>Jump:</strong> Spacebar or clicking the screen.</p>
+                <p>You have 3 lives. Taking a hit makes you temporarily invulnerable (flashing).</p>
                 <p>The game speed continuously increases as time passes, making the gaps smaller relative to your speed.</p>
                 <p>Press ESC to pause/resume the game.</p>
             </div>
@@ -193,6 +236,14 @@
         const GRAVITY = 0.7;
         const DIFFICULTY_SCALING_TIME = 10000; 
         const SPEED_INCREMENT = 1.5; 
+        
+        // NEW LIVES SYSTEM VARIABLES
+        const MAX_LIVES = 3;
+        const INVULNERABILITY_DURATION = 1500; // 1.5 seconds of flashing
+        let lives;
+        let isInvulnerable = false;
+        let invulnerabilityTimer;
+
 
         let gameSpeed = 6; 
         let playerY;
@@ -212,6 +263,7 @@
         const gameContainer = document.getElementById('game-container');
         const player = document.getElementById('player');
         const scoreDisplay = document.getElementById('score-display');
+        const livesDisplay = document.getElementById('lives-display'); // New element
         const gameOverScreen = document.getElementById('game-over-screen');
         const finalScoreDisplay = document.getElementById('final-score');
         
@@ -252,6 +304,15 @@
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
         }
+        
+        function updateLivesDisplay() {
+            let hearts = '';
+            for (let i = 0; i < MAX_LIVES; i++) {
+                hearts += (i < lives) ? '❤️' : '🖤'; // Filled or empty heart
+            }
+            livesDisplay.innerHTML = `Lives: ${hearts}`;
+        }
+
 
         // --- CORE GAME LOOP FUNCTIONS ---
 
@@ -261,6 +322,10 @@
             gameSpeed = 6;
             score = 0;
             obstacles = [];
+            lives = MAX_LIVES; // Initialize lives
+            isInvulnerable = false;
+            
+            clearTimeout(invulnerabilityTimer);
             
             resizeGameArea(); 
             
@@ -276,6 +341,10 @@
             MENU_OVERLAY.style.display = 'none';
 
             player.style.backgroundColor = '#ff4500';
+            player.classList.remove('hit'); // Ensure no lingering effects
+            gameContainer.classList.remove('shake');
+
+            updateLivesDisplay(); // Show starting lives
             gameLoop();
             scheduleNextObstacle();
         }
@@ -326,7 +395,7 @@
             player.style.top = `${playerY}px`;
         }
 
-        // --- OBSTACLE MECHANICS ---
+        // --- OBSTACLE MECHANICS (unchanged) ---
 
         function spawnObstacle() {
             if (isGameOver || isGamePaused) return; 
@@ -364,6 +433,7 @@
 
         function scheduleNextObstacle() {
             if (isGameOver) return;
+            // Faster obstacles are slightly less frequent due to speed increase scaling
             const minSpawnTime = 1000;
             const maxSpawnTime = 2500;
             const spawnDelay = Math.random() * (maxSpawnTime - minSpawnTime) + minSpawnTime;
@@ -373,6 +443,7 @@
                 if (!isGamePaused) {
                     spawnObstacle();
                 } else {
+                    // Reschedule if paused when timeout hits
                     scheduleNextObstacle();
                 }
             }, spawnDelay / (gameSpeed / 6)); 
@@ -396,6 +467,62 @@
             obstacles = newObstacles; 
         }
 
+        // --- COLLISION & LIVES HANDLING ---
+
+        function handleHit() {
+            if (isInvulnerable || isGameOver) return;
+
+            lives--;
+            updateLivesDisplay();
+            
+            // Visual Feedback: Shake screen
+            gameContainer.classList.add('shake');
+            setTimeout(() => gameContainer.classList.remove('shake'), 300);
+
+            if (lives <= 0) {
+                gameOver();
+                return;
+            }
+
+            // Start invulnerability (Flashing player)
+            isInvulnerable = true;
+            player.classList.add('hit');
+            
+            // Set timer to end invulnerability
+            clearTimeout(invulnerabilityTimer);
+            invulnerabilityTimer = setTimeout(() => {
+                isInvulnerable = false;
+                player.classList.remove('hit');
+            }, INVULNERABILITY_DURATION);
+        }
+
+
+        function checkCollision() {
+            if (!GAME_AREA_HEIGHT || isInvulnerable) return; 
+
+            const pX = PLAYER_START_X;
+            const pY = playerY;
+            const pW = PLAYER_SIZE;
+            const pH = PLAYER_SIZE;
+
+            for (const obs of obstacles) {
+                const oX = obs.x;
+                const oW = obs.width;
+                const oH = obs.height;
+                const oY = GAME_AREA_HEIGHT - GROUND_HEIGHT - oH;
+
+                // Standard AABB collision check
+                const overlapX = (pX < oX + oW) && (pX + pW > oX);
+                const overlapY = (pY + pH > oY); 
+
+                if (overlapX && overlapY) {
+                    handleHit();
+                    return; // Only take damage once per frame/contact
+                }
+            }
+        }
+
+
         // --- GAME LOGIC & SCORING ---
 
         function checkSpeedScaling(now) {
@@ -410,37 +537,18 @@
             scoreDisplay.textContent = `Score: ${score.toFixed(2)}s`;
         }
 
-        function checkCollision() {
-            if (!GAME_AREA_HEIGHT) return; 
-
-            const pX = PLAYER_START_X;
-            const pY = playerY;
-            const pW = PLAYER_SIZE;
-            const pH = PLAYER_SIZE;
-
-            for (const obs of obstacles) {
-                const oX = obs.x;
-                const oW = obs.width;
-                const oH = obs.height;
-                const oY = GAME_AREA_HEIGHT - GROUND_HEIGHT - oH;
-
-                const overlapX = (pX < oX + oW) && (pX + pW > oX);
-                const overlapY = (pY + pH > oY); 
-
-                if (overlapX && overlapY) {
-                    gameOver();
-                    return;
-                }
-            }
-        }
-
         function gameOver() {
             isGameOver = true;
             isGamePaused = true;
+            
+            // Cleanup timeouts
             clearTimeout(obstacleSpawnTimeout);
+            clearTimeout(invulnerabilityTimer);
             cancelAnimationFrame(animationFrameId);
 
             player.style.backgroundColor = '#990000'; 
+            player.classList.remove('hit'); // Stop flashing
+            gameContainer.classList.remove('shake');
             
             finalScoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
             gameOverScreen.style.display = 'flex';
@@ -454,13 +562,18 @@
 
         function init() {
             resizeGameArea(); 
+            updateLivesDisplay(); // Initial display of full lives
 
             document.addEventListener('keydown', (e) => {
                 if (e.code === 'Space') {
                     e.preventDefault(); 
                     jump();
                 } else if (e.key === 'Escape') {
-                    gameRunning && (isGamePaused ? resumeGame() : pauseGame());
+                    // Check if the game is running (not in the initial menu screen)
+                    const gameRunning = !isGameOver || (isGameOver && !MENU_OVERLAY.style.display);
+                    if (gameRunning) {
+                        isGamePaused ? resumeGame() : pauseGame();
+                    }
                 }
             });
             gameContainer.addEventListener('click', jump);

@@ -191,8 +191,10 @@
         // --- GAME CONSTANTS AND STATE ---
         const PLAYER_SPEED = 5;
         const ASTEROID_SPAWN_RATE = 1500; 
-        const COLLISION_RADIUS_FACTOR = 0.8; 
+        const COLLISION_RADIUS_FACTOR = 0.8; // Use 80% of radius for collision for a softer hit zone
+        // ... (rest of constants and state) ...
 
+        // --- GAME STATE VARIABLES (from original code) ---
         let gameState = 'ready'; 
         let isGamePaused = true; // Start paused
         let lastTime = 0;
@@ -207,24 +209,25 @@
             y: window.innerHeight / 2,
             width: 24,
             height: 24,
-            radius: 12,
+            radius: 12, // Half of width/height
             hp: 3,
-            rotation: 0
+            rotation: 0,
+            isInvulnerable: false // New: Prevents instant death from multiple collisions
         };
 
-        // --- DOM REFERENCES ---
+        // --- DOM REFERENCES (from original code) ---
         const gameContainer = document.getElementById('game-container');
         const scoreDisplay = document.getElementById('score-display');
         const hpDisplay = document.getElementById('hp-display');
         const gameOverScreen = document.getElementById('game-over-screen');
-        
+
         // Menu Elements
         const MENU_OVERLAY = document.getElementById('menu-overlay');
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
 
-        // --- Menu Logic ---
+        // --- Menu Logic (unchanged) ---
         function toggleInstructions() {
             INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
         }
@@ -245,8 +248,8 @@
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
         }
-        
-        // --- INPUT HANDLING ---
+
+        // --- INPUT HANDLING (unchanged) ---
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 isGamePaused ? resumeGame() : pauseGame();
@@ -260,12 +263,13 @@
             keys[e.key.toLowerCase()] = false;
         });
 
-        // --- GAME INITIALIZATION & LOOP CONTROL ---
+        // --- GAME INITIALIZATION & LOOP CONTROL (modified initGame) ---
 
         function initGame() {
             gameState = 'running';
             isGamePaused = false;
             player.hp = 3;
+            player.isInvulnerable = false; // Reset invulnerability
             score = 0;
             asteroids = [];
             asteroidTimer = 0;
@@ -275,7 +279,8 @@
             player.x = window.innerWidth / 2;
             player.y = window.innerHeight / 2;
             player.rotation = 0;
-            
+            player.element.style.opacity = 1; // Reset visual opacity
+
             gameOverScreen.style.display = 'none';
             MENU_OVERLAY.style.display = 'none';
             
@@ -286,7 +291,7 @@
                 requestAnimationFrame(gameLoop);
             }
         }
-        
+
         function startGame() {
             initGame();
         }
@@ -303,7 +308,7 @@
 
             updatePlayer(deltaTime);
             updateAsteroids(deltaTime);
-            checkCollisions();
+            checkCollisions(); // Now working!
             spawnAsteroid(deltaTime);
             updateScore(deltaTime);
             updateHUD();
@@ -319,7 +324,7 @@
                 `Time survived: ${score.toFixed(2)} seconds.`;
         }
 
-        // --- PLAYER LOGIC ---
+        // --- PLAYER LOGIC (minor modification to playerHit) ---
 
         function updatePlayer(deltaTime) {
             let dx = 0;
@@ -334,6 +339,7 @@
 
             if (dx !== 0 && dy !== 0) {
                 const magnitude = Math.sqrt(dx * dx + dy * dy);
+                // Normalize vector for diagonal movement
                 dx = (dx / magnitude) * moveStep;
                 dy = (dy / magnitude) * moveStep;
             }
@@ -343,9 +349,12 @@
 
             const screenW = window.innerWidth;
             const screenH = window.innerHeight;
-            player.x = Math.max(player.width / 2, Math.min(screenW - player.width / 2, player.x));
-            player.y = Math.max(player.height / 2, Math.min(screenH - player.height / 2, player.y));
             
+            // Clamp player position to screen boundaries
+            player.x = Math.max(player.radius, Math.min(screenW - player.radius, player.x));
+            player.y = Math.max(player.radius, Math.min(screenH - player.radius, player.y));
+            
+            // Rotation based on movement direction
             if (dx !== 0 || dy !== 0) {
                 player.rotation = Math.atan2(dx, -dy) * (180 / Math.PI);
             }
@@ -355,39 +364,54 @@
         }
 
         function playerHit() {
-            if (gameState !== 'running') return;
+            if (gameState !== 'running' || player.isInvulnerable) return;
             
             player.hp--;
-            
+            updateHUD(); // Immediate HUD update
+
+            // Visual feedback (Red flash)
             player.element.classList.add('hit-flash');
             setTimeout(() => {
                 player.element.classList.remove('hit-flash');
             }, 100);
+
+            // Invulnerability period (1.5 seconds)
+            player.isInvulnerable = true;
+            let flashInterval = setInterval(() => {
+                player.element.style.opacity = player.element.style.opacity === '0.3' ? '1' : '0.3';
+            }, 150);
+
+            setTimeout(() => {
+                player.isInvulnerable = false;
+                clearInterval(flashInterval);
+                player.element.style.opacity = '1'; 
+            }, 1500); // 1.5 seconds invulnerability
 
             if (player.hp <= 0) {
                 gameOver();
             }
         }
 
-        // --- ASTEROID LOGIC (Uses window.innerWidth/Height) ---
+        // --- ASTEROID LOGIC (Uses window.innerWidth/Height) (unchanged) ---
 
         function createAsteroid() {
             const size = 20 + Math.random() * 40; 
-            const baseSpeed = 1 + Math.random() * 2; 
+            const baseSpeed = 1 + Math.random() * 2.5; // Slightly faster base speed for challenge
 
             let startX, startY, vx, vy;
             const edge = Math.floor(Math.random() * 4); 
 
             const screenW = window.innerWidth;
             const screenH = window.innerHeight;
-            const targetX = screenW / 2 + (Math.random() * 200 - 100); 
-            const targetY = screenH / 2 + (Math.random() * 200 - 100);
+            const targetX = screenW / 2 + (Math.random() * screenW * 0.2 - screenW * 0.1); // Target center area
+            const targetY = screenH / 2 + (Math.random() * screenH * 0.2 - screenH * 0.1);
 
+            // Determine starting position outside the screen
             switch (edge) {
-                case 0: startX = Math.random() * screenW; startY = -size; break;
-                case 1: startX = screenW + size; startY = Math.random() * screenH; break;
-                case 2: startX = Math.random() * screenW; startY = screenH + size; break;
-                case 3: startX = -size; startY = Math.random() * screenH; break;
+                case 0: startX = Math.random() * screenW; startY = -size; break; // Top
+                case 1: startX = screenW + size; startY = Math.random() * screenH; break; // Right
+                case 2: startX = Math.random() * screenW; startY = screenH + size; break; // Bottom
+                case 3: startX = -size; startY = Math.random() * screenH; break; // Left
             }
 
             const dx = targetX - startX;
@@ -407,8 +431,8 @@
             const newAsteroid = {
                 element: asteroidElement,
                 id: Date.now() + Math.random(),
-                x: startX,
-                y: startY,
+                x: startX + size/2, // Adjust x, y to be the center of the asteroid
+                y: startY + size/2,
                 radius: size / 2,
                 vx: vx,
                 vy: vy,
@@ -420,7 +444,10 @@
 
         function spawnAsteroid(deltaTime) {
             asteroidTimer += deltaTime;
-            if (asteroidTimer >= ASTEROID_SPAWN_RATE) {
+            let currentSpawnRate = ASTEROID_SPAWN_RATE * (1 / (1 + score / 30)); // Make spawning faster over time
+            currentSpawnRate = Math.max(500, currentSpawnRate); // Cap the rate at 500ms
+            
+            if (asteroidTimer >= currentSpawnRate) {
                 createAsteroid();
                 asteroidTimer = 0;
             }
@@ -430,21 +457,24 @@
             const toRemove = [];
             const dt_factor = deltaTime / 16.6; 
 
+            const screenW = window.innerWidth;
+            const screenH = window.innerHeight;
+
             for (let i = 0; i < asteroids.length; i++) {
                 const asteroid = asteroids[i];
                 
                 asteroid.x += asteroid.vx * dt_factor;
                 asteroid.y += asteroid.vy * dt_factor;
 
+                // Position based on center point
                 asteroid.element.style.left = `${asteroid.x - asteroid.radius}px`;
                 asteroid.element.style.top = `${asteroid.y - asteroid.radius}px`;
 
-                const screenW = window.innerWidth;
-                const screenH = window.innerHeight;
-                if (asteroid.x < -asteroid.radius * 2 || 
-                    asteroid.x > screenW + asteroid.radius * 2 ||
-                    asteroid.y < -asteroid.radius * 2 || 
-                    asteroid.y > screenH + asteroid.radius * 2) {
+                // Check if asteroid is far outside screen boundaries
+                if (asteroid.x < -asteroid.radius * 3 || 
+                    asteroid.x > screenW + asteroid.radius * 3 ||
+                    asteroid.y < -asteroid.radius * 3 || 
+                    asteroid.y > screenH + asteroid.radius * 3) {
                     toRemove.push(i);
                 }
             }
@@ -456,15 +486,69 @@
             }
         }
 
-        // --- COLLISION DETECTION ---
-        // ... (unchanged) ...
+        // --- COLLISION DETECTION (FIXED AND IMPLEMENTED) ---
 
-        // --- HUD AND SCORE ---
-        // ... (unchanged) ...
+        function checkCollisions() {
+            if (player.isInvulnerable) return;
 
-        // --- INITIAL SETUP ---
+            // Player position is always (player.x, player.y) which is the center of the triangle base
+            const playerCenterX = player.x; 
+            const playerCenterY = player.y;
+
+            for (let i = 0; i < asteroids.length; i++) {
+                const asteroid = asteroids[i];
+                
+                const dx = asteroid.x - playerCenterX;
+                const dy = asteroid.y - playerCenterY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+
+                // Calculate combined radius for collision
+                // Use a slightly larger radius for the player because the "center" of the triangle
+                // is at its base, not its visual center. 
+                const combinedRadius = (player.radius * 1.5) + asteroid.radius; 
+                
+                // Check for collision using the COLLISION_RADIUS_FACTOR
+                if (distance < combinedRadius * COLLISION_RADIUS_FACTOR) {
+                    playerHit();
+                    
+                    // Remove the collided asteroid instantly
+                    asteroid.element.remove();
+                    asteroids.splice(i, 1);
+                    i--; // Adjust index after splice
+                    
+                    // Return early to prevent multiple hits in one frame
+                    return; 
+                }
+            }
+        }
+
+        // --- HUD AND SCORE (FIXED AND IMPLEMENTED) ---
+
+        function updateScore(deltaTime) {
+            // Only increase score if the game is running (unpaused)
+            score += deltaTime / 1000;
+        }
+
+        function updateHUD() {
+            scoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
+            
+            // Generate a visual HP string (e.g., "HP: ❤❤❤")
+            let hpString = 'HP: ';
+            for (let i = 0; i < 3; i++) {
+                if (i < player.hp) {
+                    hpString += '❤'; // Full Heart
+                } else {
+                    hpString += '♡'; // Empty Heart (or any empty placeholder)
+                }
+            }
+            hpDisplay.innerHTML = hpString;
+        }
+
+        // --- INITIAL SETUP (unchanged) ---
         window.onload = () => {
+            // Initial display of the menu
             MENU_OVERLAY.style.display = 'flex';
+            // The game loop starts running, but immediately hits the 'if (isGamePaused)' check until Start is pressed.
             requestAnimationFrame(gameLoop); 
         };
 

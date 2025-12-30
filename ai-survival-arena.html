@@ -21,7 +21,6 @@
             position: relative;
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5);
             border: 2px solid #00ffff;
-            /* Full screen within IFRAME */
             width: 100vw; 
             height: 100vh;
         }
@@ -44,6 +43,13 @@
             padding: 10px;
             box-sizing: border-box;
             font-size: 20px;
+        }
+        
+        /* New style for lives display */
+        #livesDisplay {
+            color: #ff00ff; /* Pink/Magenta color for lives */
+            text-shadow: 0 0 5px #ff00ff;
+            font-weight: bold;
         }
 
         #gameOverScreen {
@@ -90,7 +96,7 @@
             height: 100%;
             background-color: rgba(0, 0, 0, 0.9);
             color: #fff;
-            display: flex; /* Display initially for start screen */
+            display: flex;
             flex-direction: column;
             justify-content: center;
             align-items: center;
@@ -138,10 +144,10 @@
 <div id="gameContainer">
     <canvas id="gameCanvas"></canvas>
     <div id="uiOverlay">
-        Score: <span id="scoreDisplay">0</span>
+        Score: <span id="scoreDisplay">0</span> | Lives: <span id="livesDisplay">3</span>
     </div>
     
-    <!-- MENU OVERLAY: ONCLICK ATTRIBUTES REMOVED -->
+    <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Neon Grid Defender</h2>
         <button id="btn-start">Start Arena</button>
@@ -150,9 +156,9 @@
         <div id="instructions-box">
             <h3>Controls & Goal:</h3>
             <p><strong>Goal:</strong> Survive the enemy onslaught for as long as possible.</p>
+            <p><strong>Lives:</strong> You start with 3 lives. Take care, as enemies increase in speed!</p>
             <p><strong>Movement:</strong> WASD or Arrow Keys.</p>
             <p><strong>Shoot:</strong> Click or Tap to fire projectiles in the mouse/tap direction.</p>
-            <p>Enemies scale in speed and spawn rate over time. Hitting an enemy ends the game.</p>
             <p>Press ESC to pause/resume the game.</p>
         </div>
     </div>
@@ -170,6 +176,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const UI_SCORE = document.getElementById('scoreDisplay');
+        const LIVES_DISPLAY = document.getElementById('livesDisplay'); // Get the new lives display element
         const GAME_OVER_SCREEN = document.getElementById('gameOverScreen');
         const FINAL_SCORE = document.getElementById('finalScore');
         const RESTART_BUTTON = document.getElementById('restartButton');
@@ -177,7 +184,6 @@
         // Menu Elements
         const MENU_OVERLAY = document.getElementById('menu-overlay');
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
-        // Retrieve buttons for event listeners
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start'); 
         const BTN_INSTRUCTIONS = document.getElementById('btn-instructions');
@@ -189,6 +195,10 @@
         const PLAYER_RADIUS = 10;
         const PROJECTILE_SPEED = 8;
         const PROJECTILE_SIZE = 2;
+        
+        // NEW LIFE CONSTANTS
+        const MAX_LIVES = 3;
+        const INVULNERABILITY_DURATION_MS = 1500; // 1.5 seconds of I-frames
 
         // --- Game State ---
         let gameLoopId;
@@ -197,7 +207,6 @@
         let isGamePaused = true; 
         let keys = {};
         
-        // Time tracking variables
         let gameStartTime = 0;
         let lastEnemySpawnTime = 0;
         let baseEnemySpawnInterval = 2000; // ms
@@ -240,7 +249,6 @@
             if (isGameOver) return;
             isGamePaused = false;
             MENU_OVERLAY.style.display = 'none';
-            // When resuming, ensure the game loop restarts
             gameLoopId = requestAnimationFrame(gameLoop);
         }
 
@@ -248,6 +256,14 @@
             isGamePaused = false;
             MENU_OVERLAY.style.display = 'none';
             initGame();
+        }
+        
+        function updateLivesUI() {
+            let hearts = '';
+            for (let i = 0; i < player.lives; i++) {
+                hearts += '♥ '; // Use a heart symbol for lives
+            }
+            LIVES_DISPLAY.textContent = hearts.trim();
         }
 
         /** Calculates distance between two points */
@@ -261,14 +277,38 @@
             if (length === 0) return { x: 0, y: 0 };
             return { x: dx / length, y: dy / length };
         }
+        
+        function takeDamage() {
+            const currentTime = performance.now();
+            
+            // Check if currently invulnerable
+            if (currentTime < player.invulnerableUntil) {
+                return false;
+            }
 
-        // --- Entity Classes (omitted for brevity, assume they remain correct) ---
+            player.lives--;
+            updateLivesUI();
+            
+            if (player.lives <= 0) {
+                gameOver();
+            } else {
+                // Grant invulnerability
+                player.invulnerableUntil = currentTime + INVULNERABILITY_DURATION_MS;
+            }
+            return true;
+        }
+
+        // --- Entity Classes ---
         class Player {
             constructor(x, y) {
                 this.x = x;
                 this.y = y;
                 this.radius = PLAYER_RADIUS;
                 this.speed = 4;
+                
+                // NEW Properties
+                this.lives = MAX_LIVES;
+                this.invulnerableUntil = 0;
             }
 
             update() {
@@ -292,10 +332,24 @@
             }
 
             draw() {
+                const currentTime = performance.now();
+                const isInvulnerable = currentTime < this.invulnerableUntil;
+                
+                // Invulnerability Flash Effect: makes the player blink every 50ms
+                if (isInvulnerable) {
+                    if (Math.floor(currentTime / 50) % 2 === 0) {
+                        ctx.globalAlpha = 0.3; // Make player translucent
+                    } else {
+                        ctx.globalAlpha = 1.0;
+                    }
+                }
+
                 ctx.fillStyle = '#00ffff';
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
+                
+                ctx.globalAlpha = 1.0; // Reset alpha after drawing player
             }
         }
 
@@ -320,11 +374,6 @@
 
                 this.x += vector.x * this.speed;
                 this.y += vector.y * this.speed;
-
-                // Check collision with player
-                if (dist(this.x, this.y, player.x, player.y) < this.size / 2 + player.radius) {
-                    gameOver();
-                }
             }
 
             draw() {
@@ -372,13 +421,14 @@
             enemies = [];
             projectiles = [];
             
-            // Set initial timing
             gameStartTime = performance.now();
             lastEnemySpawnTime = gameStartTime;
             
             resizeCanvas(); 
             
             player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+            updateLivesUI(); // Initialize lives display
+            
             GAME_OVER_SCREEN.style.display = 'none';
 
             if (gameLoopId) {
@@ -415,6 +465,7 @@
         }
 
         function checkCollisions() {
+            // Projectile-Enemy Collision
             projectiles.forEach(p => {
                 if (!p.active) return;
                 
@@ -431,6 +482,26 @@
                     }
                 }
             });
+            
+            // Player-Enemy Collision (Damage Logic)
+            if (!isGameOver && player) {
+                for (let i = enemies.length - 1; i >= 0; i--) {
+                    const e = enemies[i];
+                    if (!e.active) continue;
+
+                    if (dist(e.x, e.y, player.x, player.y) < e.size / 2 + player.radius) {
+                        // Attempt to take damage
+                        const damaged = takeDamage();
+                        
+                        // Enemy is removed regardless if player took damage or was invulnerable
+                        enemies.splice(i, 1); 
+
+                        // If the game ended, stop
+                        if (isGameOver) return; 
+                    }
+                }
+            }
+
 
             projectiles = projectiles.filter(p => p.active);
             enemies = enemies.filter(e => e.active);
@@ -442,7 +513,6 @@
             
             const levelMultiplier = Math.floor(gameTimeSeconds / 10); 
 
-            // Spawn interval decreases over time
             const spawnInterval = Math.max(300, baseEnemySpawnInterval - (gameTimeSeconds * 50));
 
             if (currentTime - lastEnemySpawnTime > spawnInterval) {
@@ -458,6 +528,7 @@
             enemies.forEach(e => e.update());
             projectiles.forEach(p => p.update());
 
+            // Check collisions now includes player damage logic
             checkCollisions();
         }
 
@@ -484,20 +555,19 @@
             } 
             drawGame(); 
 
-            if (!isGameOver) {
+            if (!isGameOver && (isGamePaused || !isGamePaused)) {
                 gameLoopId = requestAnimationFrame(gameLoop);
             }
         }
 
         // --- Event Listeners ---
 
-        // 1. Game Buttons
         BTN_START.addEventListener('click', startGame);
         BTN_RESUME.addEventListener('click', resumeGame);
         BTN_INSTRUCTIONS.addEventListener('click', toggleInstructions);
         RESTART_BUTTON.addEventListener('click', startGame);
         
-        // 2. Canvas Interaction
+        // Canvas Interaction (Shooting)
         canvas.addEventListener('click', (event) => {
             if (isGameOver || isGamePaused || !player) return;
 
@@ -520,12 +590,15 @@
             projectiles.push(p);
         });
 
-        // 3. Key Press Handling
+        // Key Press Handling
         document.addEventListener('keydown', (e) => {
             const key = e.key.toLowerCase();
             if (key === 'escape') {
                 e.preventDefault(); 
-                isGamePaused ? resumeGame() : pauseGame();
+                // Only pause/resume if the Game Over screen is not active
+                if (!isGameOver) {
+                    isGamePaused ? resumeGame() : pauseGame();
+                }
             } else if (!isGamePaused) {
                 keys[key] = true;
             }

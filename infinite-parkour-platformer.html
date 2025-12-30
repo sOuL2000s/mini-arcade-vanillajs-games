@@ -63,6 +63,20 @@
             border-radius: 5px;
             z-index: 200;
         }
+        
+        /* --- NEW LIVES DISPLAY --- */
+        #lives-display {
+            position: absolute;
+            top: 50px; 
+            left: 10px;
+            font-size: 24px;
+            color: white;
+            padding: 5px 10px;
+            background: rgba(179, 0, 0, 0.6);
+            border-radius: 5px;
+            z-index: 200;
+        }
+        /* --- END LIVES DISPLAY --- */
 
         /* --- GAME OVER SCREEN --- */
         #game-over-screen {
@@ -151,6 +165,7 @@
 
     <div id="game-container">
         <div id="score">Score: 0</div>
+        <div id="lives-display">Lives: 3</div> <!-- NEW LIVES UI ELEMENT -->
         <div id="world">
             <div id="player"></div>
         </div>
@@ -165,8 +180,8 @@
                 <h3>Controls & Goal:</h3>
                 <p><strong>Goal:</strong> Travel as far right as possible by jumping between platforms.</p>
                 <p><strong>Move:</strong> Left/Right Arrows or A/D.</p>
-                <p><strong>Jump:</strong> Spacebar.</p>
-                <p>Falling off the bottom of the screen results in Game Over.</p>
+                <p><strong>Jump:</strong> Spacebar (Up to 2 jumps before landing).</p>
+                <p>Falling off the bottom of the screen costs a life.</p>
                 <p>Press ESC to pause/resume the game.</p>
             </div>
         </div>
@@ -181,16 +196,18 @@
     <script>
         // --- GAME CONSTANTS ---
         const GRAVITY = 0.8;
-        const JUMP_VELOCITY = 18;
+        const JUMP_VELOCITY = 22; // Adjusted jump power
         const RUN_SPEED = 6;
         const PLATFORM_HEIGHT = 40;
         const PLAYER_SCREEN_X = 200; 
         const CAMERA_SMOOTHING = 0.1; 
+        const MAX_LIVES = 3; // Initial lives
 
         // --- GAME STATE VARIABLES ---
         let player;
         let world;
         let scoreDisplay;
+        let livesDisplay; // Reference to the new element
         let gameOverScreen;
         let screenHeight; 
 
@@ -204,6 +221,8 @@
         let isGameOver = false;
         let isGamePaused = true; // Start paused
         let score = 0;
+        let lives = MAX_LIVES; // Current lives
+        let jumpsRemaining = 0; // Double Jump counter (0, 1, or 2)
 
         let lastPlatformX = 0;
         let currentLevelHeight = 0; 
@@ -242,6 +261,7 @@
             player = document.getElementById('player');
             world = document.getElementById('world');
             scoreDisplay = document.getElementById('score');
+            livesDisplay = document.getElementById('lives-display'); // Get the new element
             gameOverScreen = document.getElementById('game-over-screen');
 
             screenHeight = window.innerHeight;
@@ -253,7 +273,7 @@
             gameLoop(); 
         };
 
-        // --- INPUT HANDLING ---
+        // --- INPUT HANDLING (Includes Double Jump Logic) ---
         function setupInput() {
             document.addEventListener('keydown', (e) => {
                 if (e.key === 'Escape') {
@@ -265,8 +285,11 @@
                 if (isGamePaused || isGameOver) return;
                 
                 keys[e.code] = true;
-                if (e.code === 'Space' && isGrounded) {
+                
+                // Double Jump Check: Allow jump if remaining jumps > 0
+                if (e.code === 'Space' && jumpsRemaining > 0) {
                     playerVelY = -JUMP_VELOCITY;
+                    jumpsRemaining--; // Consume one jump
                     isGrounded = false;
                 }
             });
@@ -275,25 +298,39 @@
             });
         }
         
+        // --- RESPAWN LOGIC ---
+        function respawnPlayer() {
+            // Respawn position is on the starting platform
+            playerX = 50; 
+            playerVelY = 0;
+            
+            // Calculate starting Y position based on current screen height
+            playerY = window.innerHeight - PLATFORM_HEIGHT - 100 - 30; 
+            
+            jumpsRemaining = 2;
+            isGrounded = true;
+
+            // Instantly reset camera view to the start
+            targetWorldX = -(playerX - PLAYER_SCREEN_X);
+            world.style.transform = `translateX(${targetWorldX}px)`;
+        }
+
         function startGame() {
             isGamePaused = false;
             isGameOver = false;
             score = 0;
-            playerX = 50;
-            playerY = 0;
-            playerVelY = 0;
-            isGrounded = false;
-            platforms = [];
-            lastPlatformX = 0;
-            targetWorldX = 0;
+            lives = MAX_LIVES; // Reset lives
             
             document.querySelectorAll('.platform').forEach(p => p.remove());
 
             screenHeight = window.innerHeight;
             currentLevelHeight = screenHeight - PLATFORM_HEIGHT - 100;
-            playerY = currentLevelHeight - 30; 
 
+            // Create initial long platform
             createPlatform(0, currentLevelHeight, 1500);
+            lastPlatformX = 1500;
+            
+            respawnPlayer(); // Set initial position and jump count
 
             MENU_OVERLAY.style.display = 'none';
             gameOverScreen.style.display = 'none';
@@ -301,7 +338,7 @@
             gameLoop(); 
         }
 
-        // --- LEVEL GENERATION ---
+        // --- LEVEL GENERATION (No change needed here) ---
         function createPlatform(x, y, width) {
             const platformEl = document.createElement('div');
             platformEl.className = 'platform';
@@ -359,9 +396,13 @@
 
             // 3. Vertical Position Update
             let newPlayerY = playerY + playerVelY;
-            isGrounded = false;
+            
+            // Reset grounded status before collision check
+            // Note: We deliberately don't set jumpsRemaining=0 here,
+            // as we want to allow a double jump mid-air.
 
             // 4. Collision Detection
+            let landedThisFrame = false;
             platforms.forEach(p => {
                 if (
                     playerX < p.x + p.width &&
@@ -370,28 +411,40 @@
                     newPlayerY < p.y + p.height
                 ) {
                     if (playerVelY > 0 && playerY + 30 <= p.y) {
+                        // Collision from above (Landing)
                         newPlayerY = p.y - 30; 
                         playerVelY = 0;
                         isGrounded = true;
+                        landedThisFrame = true;
                     }
                     else if (playerVelY < 0 && playerY >= p.y + p.height) {
+                        // Collision from below (Hitting head)
                         playerVelY = 0; 
                         newPlayerY = p.y + p.height;
                     }
                 }
             });
 
+            // Reset jumps if we landed
+            if (landedThisFrame) {
+                jumpsRemaining = 2; 
+            }
+            
             playerY = newPlayerY;
 
-            // 5. Game Over Check (Falling off screen)
+            // 5. Lives Check (Falling off screen)
             if (playerY > screenHeight) {
-                endGame();
+                if (lives > 1) {
+                    lives--;
+                    respawnPlayer();
+                } else {
+                    endGame();
+                }
             }
 
             // 6. Score Update
             score = Math.floor(playerX / 10);
-            scoreDisplay.textContent = `Score: ${score}`;
-
+            
             // 7. Cleanup Old Platforms 
             platforms = platforms.filter(p => {
                 if (p.x + p.width < playerX - window.innerWidth / 2) {
@@ -404,8 +457,14 @@
 
         // --- RENDERING & CAMERA ---
         function updateRender() {
-            player.style.transform = `translate(${PLAYER_SCREEN_X}px, ${playerY}px)`;
+            // Update UI
+            scoreDisplay.textContent = `Score: ${score}`;
+            livesDisplay.textContent = `Lives: ${lives}`;
 
+            // Player position relative to the world
+            player.style.transform = `translate(${playerX}px, ${playerY}px)`;
+
+            // Camera movement: Smoothly center the world around the player's target screen X
             let desiredWorldX = -(playerX - PLAYER_SCREEN_X);
             targetWorldX += (desiredWorldX - targetWorldX) * CAMERA_SMOOTHING;
 

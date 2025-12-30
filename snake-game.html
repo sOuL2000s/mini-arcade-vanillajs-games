@@ -3,25 +3,85 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Coiled Destiny</title>
+    <title>Coiled Destiny - Ultimate Snake</title>
     <style>
+        /* --- CSS Variables for Theming --- */
+        :root {
+            /* Cyber Neon Default */
+            --bg-color: #1a1a2e;
+            --board-bg: #020210;
+            --board-border: #00f8ff;
+            --snake-head: #00ff7f;
+            --snake-body: #00b359;
+            --food-color: #ff3366;
+            --shadow-color: rgba(0, 248, 255, 0.8);
+            --text-color: #e0e0e0;
+            --button-bg: #3a00ff;
+            --button-hover: #00c3ff;
+            --grid-line: #051d3b;
+            --danger-color: #ff4444;
+        }
+
+        /* --- Classic Retro Theme --- */
+        .theme-retro {
+            --bg-color: #383120;
+            --board-bg: #98bc3a;
+            --board-border: #4a3e20;
+            --snake-head: #000000;
+            --snake-body: #222222;
+            --food-color: #ff0000;
+            --shadow-color: rgba(74, 62, 32, 0.9);
+            --text-color: #fff8dc;
+            --button-bg: #5f4b32;
+            --button-hover: #8b6b4e;
+            --grid-line: #aacc66;
+            --danger-color: #8b0000;
+        }
+
+        /* --- Lava Fire Theme --- */
+        .theme-lava {
+            --bg-color: #2c0606;
+            --board-bg: #1f0101;
+            --board-border: #ff8c00;
+            --snake-head: #ff4500;
+            --snake-body: #e62e00;
+            --food-color: #fffacd;
+            --shadow-color: rgba(255, 69, 0, 0.7);
+            --text-color: #ffe4b5;
+            --button-bg: #cc2200;
+            --button-hover: #ff6600;
+            --grid-line: #500e0e;
+            --danger-color: #ffcc00;
+        }
+
+        /* --- Base Styles --- */
         body {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            min-height: 100vh;
+            /* Use 100vh/100vw to ensure full viewport utilization */
+            width: 100vw; 
+            height: 100vh;
             margin: 0;
-            background-color: #222;
-            font-family: 'Arial', sans-serif;
-            color: #fff;
-            width: 100vw;
+            background-color: var(--bg-color);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            color: var(--text-color);
+            transition: background-color 0.5s;
+            overflow: hidden; /* Prevent scrollbars */
         }
 
-        /* Container scales dynamically to fit the largest possible square */
+        h1 {
+            font-size: clamp(1.5em, 4vw, 2.5em);
+            letter-spacing: 5px;
+            text-shadow: 0 0 10px var(--shadow-color);
+            margin-bottom: 10px;
+        }
+        
         #game-container {
-            width: 100%;
-            height: 100%;
+            /* Maximize space utilization */
+            width: 95vmin; 
+            height: 95vmin;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -30,175 +90,185 @@
         }
 
         #info-panel {
-            width: 90%;
-            max-width: 400px; /* Base size for info bar */
+            width: 95vmin; 
+            max-width: 900px; /* Use a max constraint for readability */
             display: flex;
             justify-content: space-between;
-            margin-bottom: 10px;
+            margin-bottom: 15px;
             padding: 10px 0;
-            font-size: 1.2em;
+            font-size: clamp(1.1em, 2.5vw, 1.4em);
+            font-weight: bold;
+            text-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
         }
         
         #game-board {
-            border: 5px solid #00f;
-            box-shadow: 0 0 20px rgba(0, 0, 255, 0.7);
-            background-color: #000;
+            border: 8px solid var(--board-border);
+            box-shadow: 0 0 40px var(--shadow-color);
+            background-color: var(--board-bg);
+            border-radius: 10px;
+            transition: box-shadow 0.3s;
         }
 
-        #game-over-screen {
+        /* Temporary message for life loss */
+        #temp-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 15px 30px;
+            background: var(--danger-color);
+            color: white;
+            border-radius: 10px;
+            font-size: 2.5em;
+            font-weight: bold;
+            text-shadow: 2px 2px 5px black;
+            display: none;
+            z-index: 30;
+            animation: pulse 0.5s ease-in-out;
+        }
+
+        @keyframes pulse {
+            0% { transform: translate(-50%, -50%) scale(0.9); opacity: 0; }
+            50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+
+        /* --- Overlay Styles (Game Over / Menu) --- */
+
+        .overlay-screen {
             position: absolute;
             display: none;
             flex-direction: column;
             justify-content: center;
             align-items: center;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.9);
-            z-index: 10;
-        }
-
-        #game-over-screen h1 {
-            color: red;
-            margin-bottom: 10px;
-        }
-        #game-over-screen p {
-            font-size: 1.5em;
-            margin-bottom: 20px;
-        }
-
-        button {
-            padding: 10px 20px;
-            font-size: 1.1em;
-            cursor: pointer;
-            background-color: #00f;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            transition: background-color 0.2s;
-        }
-
-        button:hover {
-            background-color: #00a;
-        }
-
-        #controls {
-            margin-top: 15px;
-            color: #aaa;
-            font-size: 0.9em;
-        }
-        
-        /* --- MENU OVERLAY STYLES (Used for Pausing) --- */
-        #menu-overlay { 
-            position: absolute;
-            top: 0;
-            left: 0;
             width: 100%;
             height: 100%;
             background-color: rgba(0, 0, 0, 0.95);
-            color: #fff;
-            display: none; 
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            text-align: center;
-            z-index: 20; 
-            font-size: 1.5em;
+            z-index: 20;
+            border-radius: 10px;
         }
 
-        #menu-overlay h2 {
-            color: #00f;
-            font-size: 2.5em;
-            margin-bottom: 20px;
+        .overlay-screen h1 {
+            color: var(--food-color);
+            margin-bottom: 10px;
+            font-size: clamp(2.5em, 6vw, 4em);
+            text-shadow: 0 0 15px var(--food-color);
+        }
+        .overlay-screen p {
+            font-size: clamp(1.2em, 3vw, 1.8em);
+            margin-bottom: 25px;
         }
 
-        #menu-overlay button {
-            padding: 10px 20px;
-            margin: 10px;
-            font-size: 1em;
+        button {
+            padding: 12px 25px;
+            font-size: clamp(1em, 2vw, 1.2em);
             cursor: pointer;
-            background-color: #00f;
-            color: #fff;
+            background-color: var(--button-bg);
+            color: var(--text-color);
             border: none;
-            border-radius: 5px;
-            transition: background-color 0.2s;
+            border-radius: 8px;
+            transition: background-color 0.3s, transform 0.1s, box-shadow 0.3s;
+            margin: 8px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.4);
+        }
+
+        button:hover {
+            background-color: var(--button-hover);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px var(--shadow-color);
         }
         
-        #instructions-box {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.1);
-            border-radius: 5px;
-            max-width: 80%;
-            font-size: 0.7em;
-            text-align: left;
-            display: none;
+        #menu-overlay h2 {
+            color: var(--board-border);
+            font-size: clamp(2em, 8vw, 3em);
+            margin-bottom: 20px;
+            text-shadow: 0 0 15px var(--board-border);
         }
     </style>
 </head>
-<body>
+<body class="theme-neon">
 
     <h1>Coiled Destiny</h1>
     
     <div id="info-panel">
         <div>Score: <span id="score">0</span></div>
+        <div style="color: var(--danger-color);">Lives: <span id="lives">3</span></div>
         <div>Level (Speed): <span id="speed">1</span></div>
     </div>
 
     <div id="game-container">
+        
+        <div id="temp-message"></div>
+
         <!-- PAUSE MENU OVERLAY -->
-        <div id="menu-overlay">
+        <div id="menu-overlay" class="overlay-screen" style="display: flex;">
             <h2>Coiled Destiny</h2>
             <button id="btn-start" onclick="startGame()">Start Game</button>
             <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
-            <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
-            <div id="instructions-box">
+            <button onclick="toggleInstructions()">Instructions</button>
+            
+            <div id="theme-selector" style="margin-top: 20px;">
+                <label for="theme-select">Choose Theme:</label>
+                <select id="theme-select" onchange="applyTheme(this.value)">
+                    <option value="neon">Cyber Neon</option>
+                    <option value="retro">Classic Retro</option>
+                    <option value="lava">Lava Fire</option>
+                </select>
+            </div>
+            
+            <div id="instructions-box" style="display: none; font-size: 0.9em; max-width: 90%;">
                 <h3>Controls & Goal:</h3>
-                <p><strong>Goal:</strong> Consume the red food (F) to grow the snake and increase your score.</p>
-                <p><strong>Movement:</strong> Arrow Keys or WASD.</p>
-                <p><strong>Failure:</strong> Hitting the boundaries or the snake's own body ends the game.</p>
-                <p>The game speed increases every 20 points, continuously boosting difficulty.</p>
-                <p>Press ESC to pause/resume the game.</p>
+                <p><strong>Goal:</strong> Consume food to grow. Hitting walls or self resets the board and costs 1 life.</p>
+                <p><strong>Movement:</strong> Arrow Keys or WASD (Inputs are buffered for smooth play).</p>
+                <p><strong>Pause:</strong> Press ESC.</p>
             </div>
         </div>
         
-        <div id="game-over-screen">
-            <h1>GAME OVER!</h1>
-            <p>Final Score: <span id="final-score">0</span></p>
-            <button onclick="startGame()">Restart Game</button>
+        <div id="game-over-screen" class="overlay-screen">
+            <h1>FINAL GAME OVER!</h1>
+            <p>You ran out of lives.<br>Final Score: <span id="final-score">0</span></p>
+            <button onclick="startGame()">Start New Game</button>
         </div>
+        
         <canvas id="game-board"></canvas>
     </div>
 
     <div id="controls">
-        Use Arrow Keys or WASD to move.
+        Use Arrow Keys or WASD to move. Press ESC to Pause.
     </div>
 
     <script>
         // --- Configuration ---
         let CANVAS_SIZE;
-        const GRID_SIZE = 20; // 20x20 grid (fixed)
+        const GRID_SIZE = 20; 
         let CELL_SIZE; 
         const INITIAL_SPEED_MS = 150;
         const SPEED_INCREASE_INTERVAL = 20;
         const SPEED_DECREMENT = 10;
+        const MIN_SPEED_MS = 40;
+        const INITIAL_LIVES = 3;
 
         // --- Game State Variables ---
         let canvas, ctx;
         let snake;
         let food;
-        let dx, dy;
+        let dx, dy; // Current Direction
+        let directionQueue = []; // Input queue for smooth movement
         let score;
+        let lives;
         let gameLoopInterval;
         let currentSpeed;
-        let isMoving;
         let gameRunning = false;
-        let isGamePaused = true; // Start paused
+        let isGamePaused = true; 
 
         // --- DOM Elements ---
+        const bodyElement = document.body;
         const scoreDisplay = document.getElementById('score');
+        const livesDisplay = document.getElementById('lives');
         const speedDisplay = document.getElementById('speed');
         const gameOverScreen = document.getElementById('game-over-screen');
         const finalScoreDisplay = document.getElementById('final-score');
+        const tempMessage = document.getElementById('temp-message');
         
         // Menu Elements
         const MENU_OVERLAY = document.getElementById('menu-overlay');
@@ -206,20 +276,34 @@
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
 
+        // --- Theme Management ---
+        
+        function applyTheme(themeName) {
+            bodyElement.className = 'theme-' + themeName;
+            if (gameRunning && !isGamePaused) {
+                draw();
+            }
+        }
+        
+        window.onload = function() {
+            canvas = document.getElementById('game-board');
+            ctx = canvas.getContext('2d');
+            resizeCanvas();
+            applyTheme(document.getElementById('theme-select').value);
+            
+            MENU_OVERLAY.style.display = 'flex';
+        };
+
         // --- Dynamic Sizing and Menu Logic ---
         
         function resizeCanvas() {
-            // Determine the maximum square size that fits the viewport
-            const maxWidth = window.innerWidth * 0.9;
-            const maxHeight = window.innerHeight * 0.7;
+            const vmin = Math.min(window.innerWidth, window.innerHeight);
+            let targetSize = vmin * 0.95; 
             
-            CANVAS_SIZE = Math.floor(Math.min(maxWidth, maxHeight));
+            CANVAS_SIZE = Math.floor(targetSize / GRID_SIZE) * GRID_SIZE;
             
-            // Ensure CANVAS_SIZE is divisible by GRID_SIZE (20)
-            CANVAS_SIZE = Math.floor(CANVAS_SIZE / GRID_SIZE) * GRID_SIZE;
-            
-            // Clamp size between a reasonable min (200) and max (800)
-            CANVAS_SIZE = Math.max(200, Math.min(800, CANVAS_SIZE)); 
+            // Clamp size between 400 and 900
+            CANVAS_SIZE = Math.max(400, Math.min(900, CANVAS_SIZE)); 
             
             canvas.width = CANVAS_SIZE;
             canvas.height = CANVAS_SIZE;
@@ -250,48 +334,46 @@
         
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && gameRunning) {
+                e.preventDefault();
                 isGamePaused ? resumeGame() : pauseGame();
             }
         });
 
-        // --- Initialization ---
-
-        window.onload = function() {
-            canvas = document.getElementById('game-board');
-            ctx = canvas.getContext('2d');
-            resizeCanvas();
-            
-            // Initial view: Show Menu
-            MENU_OVERLAY.style.display = 'flex';
-        };
+        // --- Initialization and Game Flow ---
 
         function startGame() {
-            if (gameRunning) return;
+            clearInterval(gameLoopInterval);
             
             gameRunning = true;
             isGamePaused = false;
             
-            resizeCanvas(); // Ensure canvas is sized correctly on start
-            
-            // Reset state
-            snake = [{x: 10, y: 10}, {x: 9, y: 10}];
-            dx = 1;
-            dy = 0;
+            // Initial Game State Setup
             score = 0;
+            lives = INITIAL_LIVES;
             currentSpeed = INITIAL_SPEED_MS;
-            isMoving = true;
+            directionQueue = [];
 
             scoreDisplay.innerText = score;
+            livesDisplay.innerText = lives;
             speedDisplay.innerText = 1;
+            
             gameOverScreen.style.display = 'none';
             MENU_OVERLAY.style.display = 'none';
 
-            spawnFood();
-            
+            resetBoardState();
             startLoop();
 
-            document.removeEventListener('keydown', changeDirection); 
-            document.addEventListener('keydown', changeDirection);
+            document.removeEventListener('keydown', handleDirectionInput); 
+            document.addEventListener('keydown', handleDirectionInput);
+        }
+        
+        function resetBoardState() {
+            // Reset snake to center, moving right
+            snake = [{x: Math.floor(GRID_SIZE / 2), y: Math.floor(GRID_SIZE / 2)}];
+            dx = 1; 
+            dy = 0;
+            directionQueue = []; 
+            spawnFood();
         }
 
         function startLoop() {
@@ -303,9 +385,10 @@
         // --- Core Drawing and Movement ---
 
         function drawGrid() {
-            ctx.strokeStyle = '#020210';
-            ctx.lineWidth = 0.5;
-            for (let i = 0; i <= GRID_SIZE; i++) {
+            ctx.strokeStyle = getComputedStyle(bodyElement).getPropertyValue('--grid-line');
+            ctx.lineWidth = 1;
+            
+            for (let i = 0; i < GRID_SIZE; i++) {
                 // Vertical lines
                 ctx.beginPath();
                 ctx.moveTo(i * CELL_SIZE, 0);
@@ -321,34 +404,67 @@
         }
 
         function draw() {
+            const boardBg = getComputedStyle(bodyElement).getPropertyValue('--board-bg');
+            const snakeHeadColor = getComputedStyle(bodyElement).getPropertyValue('--snake-head');
+            const snakeBodyColor = getComputedStyle(bodyElement).getPropertyValue('--snake-body');
+            const foodColor = getComputedStyle(bodyElement).getPropertyValue('--food-color');
+            
             // Clear the board
-            ctx.fillStyle = '#000';
+            ctx.fillStyle = boardBg;
             ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
             
             drawGrid();
 
-            // Draw Food
-            ctx.fillStyle = 'red';
+            // Draw Food (with glow effect)
+            ctx.fillStyle = foodColor;
+            ctx.shadowColor = foodColor;
+            ctx.shadowBlur = 10;
             ctx.fillRect(food.x * CELL_SIZE, food.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            ctx.shadowBlur = 0; 
 
             // Draw Snake
             snake.forEach((segment, index) => {
-                ctx.fillStyle = index === 0 ? '#0F0' : '#090';
+                ctx.fillStyle = index === 0 ? snakeHeadColor : snakeBodyColor;
+                
                 ctx.fillRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
                 
-                ctx.strokeStyle = '#000';
+                ctx.strokeStyle = boardBg;
+                ctx.lineWidth = 1;
                 ctx.strokeRect(segment.x * CELL_SIZE, segment.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
             });
         }
 
+        function processInputQueue() {
+            if (directionQueue.length === 0) return;
+            
+            const nextDirection = directionQueue.shift();
+            
+            // Check for 180 degree reversal prevention
+            const isHorizontalReversal = dx === -nextDirection.dx && dy === 0;
+            const isVerticalReversal = dy === -nextDirection.dy && dx === 0;
+            
+            if (!isHorizontalReversal && !isVerticalReversal) {
+                dx = nextDirection.dx;
+                dy = nextDirection.dy;
+            } else {
+                 // If reversal, skip this direction, but check the next one immediately
+                 processInputQueue();
+            }
+        }
+
+
         function moveSnake() {
-            if (!isMoving || isGamePaused) return;
+            if (isGamePaused) return;
+
+            // Process any waiting input from the queue
+            processInputQueue(); 
 
             const newHead = {
                 x: snake[0].x + dx,
                 y: snake[0].y + dy
             };
 
+            // 1. Wall or Self Collision Check
             if (
                 newHead.x < 0 || 
                 newHead.x >= GRID_SIZE || 
@@ -356,19 +472,21 @@
                 newHead.y >= GRID_SIZE ||
                 checkSelfCollision(newHead)
             ) {
-                gameOver();
+                lifeLost();
                 return;
             }
 
             snake.unshift(newHead);
 
+            // 2. Food Check
             if (newHead.x === food.x && newHead.y === food.y) {
                 score++;
                 scoreDisplay.innerText = score;
                 spawnFood();
 
+                // Speed increase logic
                 if (score > 0 && score % SPEED_INCREASE_INTERVAL === 0) {
-                    currentSpeed = Math.max(50, currentSpeed - SPEED_DECREMENT);
+                    currentSpeed = Math.max(MIN_SPEED_MS, currentSpeed - SPEED_DECREMENT);
                     
                     const level = 1 + Math.floor(score / SPEED_INCREASE_INTERVAL);
                     speedDisplay.innerText = level;
@@ -376,26 +494,18 @@
                     startLoop(); // Restart loop with new speed
                 }
             } else {
+                // 3. Normal Movement (remove tail)
                 snake.pop();
             }
-            
-            isMoving = true;
         }
 
         function gameLoop() {
-            if (isGamePaused) {
-                // If paused, the interval should already be cleared, but this is a safety check.
-                return;
-            }
+            if (isGamePaused) return;
             moveSnake();
             draw();
         }
 
-        // --- Helper Functions ---
-
-        function getRandomCoordinate() {
-            return Math.floor(Math.random() * GRID_SIZE);
-        }
+        // --- Collision and Input Handlers ---
 
         function spawnFood() {
             let newFood;
@@ -409,58 +519,82 @@
             food = newFood;
         }
 
+        function getRandomCoordinate() {
+            return Math.floor(Math.random() * GRID_SIZE);
+        }
+
         function checkSelfCollision(head) {
             for (let i = 1; i < snake.length; i++) {
-                if (head.x === snake[i].x && head.y === head.y) {
+                if (head.x === snake[i].x && head.y === snake[i].y) {
                     return true;
                 }
             }
             return false;
         }
 
-        function changeDirection(event) {
-            if (!gameRunning || !isMoving || isGamePaused) return;
+        function handleDirectionInput(event) {
+            if (!gameRunning || isGamePaused) return;
 
-            const keyPressed = event.key;
-            
-            const goingUp = dy === -1;
-            const goingDown = dy === 1;
-            const goingLeft = dx === -1;
-            const goingRight = dx === 1;
+            const keyPressed = event.key.toLowerCase();
+            let newDirection = null;
 
-            let newDx = dx;
-            let newDy = dy;
-
-            if ((keyPressed === 'ArrowLeft' || keyPressed === 'a') && !goingRight) {
-                newDx = -1; newDy = 0;
-            } else if ((keyPressed === 'ArrowRight' || keyPressed === 'd') && !goingLeft) {
-                newDx = 1; newDy = 0;
-            } else if ((keyPressed === 'ArrowUp' || keyPressed === 'w') && !goingDown) {
-                newDx = 0; newDy = -1;
-            } else if ((keyPressed === 'ArrowDown' || keyPressed === 's') && !goingUp) {
-                newDx = 0; newDy = 1;
+            if (keyPressed === 'arrowleft' || keyPressed === 'a') {
+                newDirection = { dx: -1, dy: 0 };
+            } else if (keyPressed === 'arrowright' || keyPressed === 'd') {
+                newDirection = { dx: 1, dy: 0 };
+            } else if (keyPressed === 'arrowup' || keyPressed === 'w') {
+                newDirection = { dx: 0, dy: -1 };
+            } else if (keyPressed === 'arrowdown' || keyPressed === 's') {
+                newDirection = { dx: 0, dy: 1 };
             }
 
-            if (newDx !== dx || newDy !== dy) {
-                dx = newDx;
-                dy = newDy;
-                isMoving = false;
+            if (newDirection) {
+                // Prevent queue bloat, only queue if the last item wasn't identical
+                if (directionQueue.length === 0 || directionQueue[directionQueue.length - 1].dx !== newDirection.dx || directionQueue[directionQueue.length - 1].dy !== newDirection.dy) {
+                    directionQueue.push(newDirection);
+                }
             }
         }
+        
+        function showTempMessage(message) {
+            tempMessage.innerText = message;
+            tempMessage.style.display = 'block';
+            setTimeout(() => {
+                tempMessage.style.display = 'none';
+            }, 1000);
+        }
 
-        function gameOver() {
-            gameRunning = false;
-            isGamePaused = true;
+        function lifeLost() {
+            lives--;
+            livesDisplay.innerText = lives;
             clearInterval(gameLoopInterval);
             
+            if (lives <= 0) {
+                // Final Game Over
+                finalGameOver();
+                return;
+            }
+            
+            // Life lost, reset and restart
+            showTempMessage(`Life Lost! (${lives} remaining)`);
+            
+            // Briefly pause and reset the state before restarting
+            isGamePaused = true;
+            setTimeout(() => {
+                resetBoardState();
+                isGamePaused = false;
+                startLoop();
+            }, 1500); // 1.5 second delay before resuming
+        }
+
+        function finalGameOver() {
+            gameRunning = false;
+            isGamePaused = true;
+            
             finalScoreDisplay.innerText = score;
-            document.querySelector('#game-over-screen h1').innerText = 'GAME OVER!';
-            document.querySelector('#game-over-screen p').innerText = `Final Score: ${score}`;
-            document.querySelector('#game-over-screen button').innerText = 'Play Again';
             gameOverScreen.style.display = 'flex';
         }
 
     </script>
 </body>
 </html>
-
