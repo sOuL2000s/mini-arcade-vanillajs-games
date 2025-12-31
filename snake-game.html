@@ -80,8 +80,8 @@
         
         #game-container {
             /* Maximize space utilization */
-            width: 95vmin; 
-            height: 95vmin;
+            width: auto; 
+            height: auto;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -288,7 +288,9 @@
         window.onload = function() {
             canvas = document.getElementById('game-board');
             ctx = canvas.getContext('2d');
-            resizeCanvas();
+            
+            resizeCanvas(); // Call the new resizing logic immediately
+            
             applyTheme(document.getElementById('theme-select').value);
             
             MENU_OVERLAY.style.display = 'flex';
@@ -296,18 +298,58 @@
 
         // --- Dynamic Sizing and Menu Logic ---
         
+        // Helper function to calculate full element height (including margins)
+        function getOuterHeight(element) {
+            // Check if element exists or is hidden
+            if (!element || window.getComputedStyle(element).display === 'none') return 0;
+            const style = window.getComputedStyle(element);
+            const margins = parseFloat(style.marginTop) + parseFloat(style.marginBottom);
+            return element.offsetHeight + margins;
+        }
+
         function resizeCanvas() {
-            const vmin = Math.min(window.innerWidth, window.innerHeight);
-            let targetSize = vmin * 0.95; 
+            // 1. Get references to external elements
+            const h1Element = document.querySelector('h1');
+            const infoElement = document.getElementById('info-panel');
+            const controlsElement = document.getElementById('controls');
+            const gameContainer = document.getElementById('game-container');
+
+            // 2. Calculate reserved vertical space (Header + Info + Controls + Buffer)
+            // Add an extra buffer (e.g., 40px) for general body margins and spacing.
+            const reservedVerticalSpace = getOuterHeight(h1Element) + 
+                                        getOuterHeight(infoElement) + 
+                                        getOuterHeight(controlsElement) + 
+                                        40; 
+
+            const availableHeight = window.innerHeight - reservedVerticalSpace;
+            const availableWidth = window.innerWidth * 0.95; // Leaving a slight horizontal margin
+
+            // 3. Determine the maximum possible square size
+            let targetSize = Math.min(availableHeight, availableWidth);
             
-            CANVAS_SIZE = Math.floor(targetSize / GRID_SIZE) * GRID_SIZE;
+            // 4. Ensure the size is snapped to the GRID_SIZE (20)
+            let newCanvasSize = Math.floor(targetSize / GRID_SIZE) * GRID_SIZE;
+
+            // Apply clamping (Min 400px for playability, Max 900px for visual comfort)
+            newCanvasSize = Math.max(400, Math.min(900, newCanvasSize));
             
-            // Clamp size between 400 and 900
-            CANVAS_SIZE = Math.max(400, Math.min(900, CANVAS_SIZE)); 
+            // If the size hasn't changed, skip DOM manipulation
+            if (newCanvasSize === CANVAS_SIZE) return; 
+
+            CANVAS_SIZE = newCanvasSize;
             
             canvas.width = CANVAS_SIZE;
             canvas.height = CANVAS_SIZE;
             CELL_SIZE = CANVAS_SIZE / GRID_SIZE;
+            
+            // Dynamically set the container size to frame the canvas perfectly
+            gameContainer.style.width = `${CANVAS_SIZE}px`;
+            gameContainer.style.height = `${CANVAS_SIZE}px`; 
+
+            // Crucial: We need to redraw the board after resizing
+            if (gameRunning || isGamePaused) {
+                draw();
+            }
         }
         window.addEventListener('resize', resizeCanvas);
         
