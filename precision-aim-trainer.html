@@ -149,6 +149,24 @@
         #start-button:hover {
             background-color: #cba6f7;
         }
+        
+        /* High Score Styling */
+        #high-score-display {
+            margin-top: 15px;
+            padding: 10px 20px;
+            background: rgba(180, 190, 254, 0.1);
+            border-left: 3px solid #89b4fa;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: #a6e3a1; 
+            font-weight: bold;
+        }
+        #new-high-score-message {
+            color: #a6e3a1; 
+            font-weight: bold; 
+            margin-bottom: 10px;
+        }
     </style>
 </head>
 <body>
@@ -164,19 +182,21 @@
         <!-- PAUSE MENU OVERLAY -->
         <div id="menu-overlay">
             <h2>Game Paused</h2>
+            <div id="high-score-display">
+                Current Record: <span id="current-high-score-menu">0</span>
+            </div>
             <button id="btn-resume" onclick="resumeGame()">Resume</button>
             <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
-            <div id="instructions-box">
-                <h3>Controls & Goal:</h3>
-                <p><strong>Goal:</strong> Click the target as fast as possible before time runs out.</p>
-                <p>Targets shrink and the visibility time decreases continuously to increase difficulty.</p>
-                <p>Missing the target or running out of time loses a life. Lose 3 lives to end the game.</p>
-                <p>Press ESC to pause/resume the game.</p>
-            </div>
         </div>
 
         <div id="overlay">
             <h1>Vector Clicker</h1>
+            
+            <!-- High Score Display on Main Screen -->
+            <div id="high-score-display">
+                Best Score: <span id="current-high-score">0</span> hits
+            </div>
+            
             <p id="overlay-text">Click the colored target as fast as possible to increase your score.</p>
             <p>Difficulty continuously scales: Targets get smaller and disappear faster!</p>
             <p>Miss or run out of time, and you lose a life. Lose 3 lives to end the game.</p>
@@ -193,11 +213,13 @@
 
         const SIZE_DECREMENT_FACTOR = 0.985;
         const TIME_DECREMENT_FACTOR = 0.99;
+        
+        const HIGH_SCORE_KEY = 'vectorClickerHighScore';
 
         let score = 0;
         let lives = 3;
         let gameActive = false;
-        let isGamePaused = true; // Start paused
+        let isGamePaused = true; 
         let targetTimer;
         let currentTargetTime = INITIAL_VISIBILITY_TIME;
         let currentTargetSize = INITIAL_TARGET_SIZE;
@@ -215,6 +237,47 @@
         const MENU_OVERLAY = document.getElementById('menu-overlay');
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
+
+        // High Score Elements
+        const CURRENT_HIGH_SCORE_MENU = document.getElementById('current-high-score-menu');
+        const CURRENT_HIGH_SCORE_OVERLAY = document.getElementById('current-high-score');
+
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score (number of hits) from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseInt(score) : 0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlays. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            CURRENT_HIGH_SCORE_OVERLAY.textContent = highscore;
+            CURRENT_HIGH_SCORE_MENU.textContent = highscore;
+        }
+
 
         // --- Menu Logic ---
         function toggleInstructions() {
@@ -236,6 +299,9 @@
             
             clearTimeout(targetTimer);
             targetElement.style.display = 'none';
+            
+            // If quitting mid-game, update the score display
+            renderHighestScore();
         }
 
         // --- Utility Functions ---
@@ -342,9 +408,22 @@
             clearTimeout(targetTimer);
             targetElement.style.display = 'none';
 
-            overlayText.innerHTML = `Game Over! You scored <strong>${score}</strong> hits.<br>Try again to beat your record!`;
+            const finalScore = score;
+            const isNewHighScore = saveHighestScore(finalScore);
+            const currentHighest = loadHighestScore();
+
+            let message = `Game Over! You scored <strong>${finalScore}</strong> hits.`;
+            if (isNewHighScore) {
+                message = `<span id="new-high-score-message">NEW HIGH SCORE!</span><br>${message}`;
+            }
+
+            overlayText.innerHTML = message;
+            CURRENT_HIGH_SCORE_OVERLAY.textContent = currentHighest;
             startButton.textContent = "Play Again";
             overlay.style.display = 'flex';
+            
+            // Update score displays
+            renderHighestScore();
         }
 
         // --- Event Listeners ---
@@ -365,7 +444,10 @@
             }
         });
 
-        document.addEventListener('DOMContentLoaded', updateHUD);
+        document.addEventListener('DOMContentLoaded', () => {
+            updateHUD();
+            renderHighestScore(); // Load high score on initial load
+        });
     </script>
 
 </body>

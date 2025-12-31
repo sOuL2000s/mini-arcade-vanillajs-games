@@ -137,6 +137,21 @@
             text-align: left;
             display: none;
         }
+        
+        /* High Score List Styling */
+        #high-score-list {
+            list-style: none; 
+            padding: 0; 
+            font-size: 0.8em; 
+            color: #ff00ff; 
+            text-shadow: 0 0 3px #ff00ff;
+            margin-bottom: 20px;
+        }
+        #high-score-list li:first-child {
+            font-size: 1.2em;
+            color: #00ffff;
+            text-shadow: 0 0 5px #00ffff;
+        }
     </style>
 </head>
 <body>
@@ -150,6 +165,15 @@
     <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Neon Grid Defender</h2>
+        
+        <!-- HIGH SCORE DISPLAY CONTAINER -->
+        <div id="high-score-display" style="margin-bottom: 20px; text-align: center;">
+            <h3>Top Scores</h3>
+            <ul id="high-score-list">
+                <!-- Scores will be inserted here by JavaScript -->
+            </ul>
+        </div>
+        
         <button id="btn-start">Start Arena</button>
         <button id="btn-resume" style="display:none;">Resume</button>
         <button id="btn-instructions">Instructions</button>
@@ -167,6 +191,8 @@
         <h1>GAME OVER</h1>
         <p>You survived the AI onslaught!</p>
         <p>Final Score: <span id="finalScore">0</span></p>
+        <p id="highScoreMessage" style="color: #00ff00; font-weight: bold; display: none; text-shadow: 0 0 10px #00ff00;">NEW HIGH SCORE ACHIEVED!</p>
+        <p style="font-size: 0.8em;">Highest Ever: <span id="currentHighestScore">0</span></p>
         <button id="restartButton">Restart Arena</button>
     </div>
 </div>
@@ -176,7 +202,7 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         const UI_SCORE = document.getElementById('scoreDisplay');
-        const LIVES_DISPLAY = document.getElementById('livesDisplay'); // Get the new lives display element
+        const LIVES_DISPLAY = document.getElementById('livesDisplay'); 
         const GAME_OVER_SCREEN = document.getElementById('gameOverScreen');
         const FINAL_SCORE = document.getElementById('finalScore');
         const RESTART_BUTTON = document.getElementById('restartButton');
@@ -187,6 +213,12 @@
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start'); 
         const BTN_INSTRUCTIONS = document.getElementById('btn-instructions');
+        
+        // High Score Elements
+        const HIGH_SCORE_KEY = 'neonGridDefenderHighScores';
+        const HIGH_SCORE_MESSAGE = document.getElementById('highScoreMessage');
+        const CURRENT_HIGHEST_SCORE_DISPLAY = document.getElementById('currentHighestScore');
+        const HIGH_SCORE_LIST_UL = document.getElementById('high-score-list');
 
 
         // --- Game Constants ---
@@ -215,6 +247,58 @@
         let projectiles = [];
         let player = null;
 
+        // --- High Score Management ---
+        
+        /** Loads high scores from local storage, returns array sorted descending. */
+        function loadHighScores() {
+            try {
+                const scores = localStorage.getItem(HIGH_SCORE_KEY);
+                // Ensure scores are treated as numbers and sorted descending
+                const parsedScores = scores ? JSON.parse(scores).map(Number) : [];
+                return parsedScores.sort((a, b) => b - a);
+            } catch (e) {
+                console.error("Error loading high scores:", e);
+                return [];
+            }
+        }
+
+        /** Saves the updated score array to local storage, keeping only top 10. */
+        function saveHighScores(scores) {
+            // Sort and keep top 10
+            scores.sort((a, b) => b - a);
+            const topScores = scores.slice(0, 10);
+            try {
+                localStorage.setItem(HIGH_SCORE_KEY, JSON.stringify(topScores));
+            } catch (e) {
+                console.error("Error saving high scores:", e);
+            }
+        }
+
+        /** Adds a new score and persists the updated list. */
+        function updateHighScores(newScore) {
+            let scores = loadHighScores();
+            scores.push(newScore);
+            saveHighScores(scores);
+        }
+
+        /** Renders the high score list on the menu overlay. */
+        function renderHighScores() {
+            const scores = loadHighScores();
+            HIGH_SCORE_LIST_UL.innerHTML = '';
+            
+            if (scores.length === 0) {
+                HIGH_SCORE_LIST_UL.innerHTML = '<li>No scores recorded yet.</li>';
+                return;
+            }
+            
+            scores.forEach((s, index) => {
+                const li = document.createElement('li');
+                li.textContent = `#${index + 1}: ${s}`;
+                HIGH_SCORE_LIST_UL.appendChild(li);
+            });
+        }
+
+
         // --- Utility Functions & Menu Logic ---
         
         function resizeCanvas() {
@@ -242,6 +326,7 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
+            renderHighScores(); // Update scores when pausing
             if (gameLoopId) cancelAnimationFrame(gameLoopId);
         }
 
@@ -298,58 +383,44 @@
             return true;
         }
 
-        // --- Entity Classes ---
+        // --- Entity Classes (omitted for brevity, assume they are unchanged but included in the final output) ---
         class Player {
             constructor(x, y) {
                 this.x = x;
                 this.y = y;
                 this.radius = PLAYER_RADIUS;
                 this.speed = 4;
-                
-                // NEW Properties
                 this.lives = MAX_LIVES;
                 this.invulnerableUntil = 0;
             }
-
             update() {
                 let dx = 0;
                 let dy = 0;
-
-                // WASD or Arrow Keys
                 if (keys['w'] || keys['arrowup']) dy -= 1;
                 if (keys['s'] || keys['arrowdown']) dy += 1;
                 if (keys['a'] || keys['arrowleft']) dx -= 1;
                 if (keys['d'] || keys['arrowright']) dx += 1;
-
                 const vector = normalize(dx, dy);
-
                 this.x += vector.x * this.speed;
                 this.y += vector.y * this.speed;
-
-                // Boundary checking
                 this.x = Math.max(this.radius, Math.min(CANVAS_WIDTH - this.radius, this.x));
                 this.y = Math.max(this.radius, Math.min(CANVAS_HEIGHT - this.radius, this.y));
             }
-
             draw() {
                 const currentTime = performance.now();
                 const isInvulnerable = currentTime < this.invulnerableUntil;
-                
-                // Invulnerability Flash Effect: makes the player blink every 50ms
                 if (isInvulnerable) {
                     if (Math.floor(currentTime / 50) % 2 === 0) {
-                        ctx.globalAlpha = 0.3; // Make player translucent
+                        ctx.globalAlpha = 0.3;
                     } else {
                         ctx.globalAlpha = 1.0;
                     }
                 }
-
                 ctx.fillStyle = '#00ffff';
                 ctx.beginPath();
                 ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
                 ctx.fill();
-                
-                ctx.globalAlpha = 1.0; // Reset alpha after drawing player
+                ctx.globalAlpha = 1.0;
             }
         }
 
@@ -363,19 +434,14 @@
                 this.color = '#ff4444';
                 this.active = true;
             }
-
             update() {
                 if (!this.active || !player) return;
-
                 const dx = player.x - this.x;
                 const dy = player.y - this.y;
-
                 const vector = normalize(dx, dy);
-
                 this.x += vector.x * this.speed;
                 this.y += vector.y * this.speed;
             }
-
             draw() {
                 ctx.fillStyle = this.color;
                 ctx.fillRect(this.x - this.size / 2, this.y - this.size / 2, this.size, this.size);
@@ -392,18 +458,14 @@
                 this.color = '#ffffff';
                 this.active = true;
             }
-
             update() {
                 if (!this.active) return;
                 this.x += this.vx;
                 this.y += this.vy;
-
-                // Check boundaries
                 if (this.x < 0 || this.x > CANVAS_WIDTH || this.y < 0 || this.y > CANVAS_HEIGHT) {
                     this.active = false;
                 }
             }
-
             draw() {
                 ctx.fillStyle = this.color;
                 ctx.beginPath();
@@ -411,6 +473,7 @@
                 ctx.fill();
             }
         }
+        // --- End Entity Classes ---
 
         // --- Game Logic ---
 
@@ -427,7 +490,7 @@
             resizeCanvas(); 
             
             player = new Player(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
-            updateLivesUI(); // Initialize lives display
+            updateLivesUI(); 
             
             GAME_OVER_SCREEN.style.display = 'none';
 
@@ -528,7 +591,6 @@
             enemies.forEach(e => e.update());
             projectiles.forEach(p => p.update());
 
-            // Check collisions now includes player damage logic
             checkCollisions();
         }
 
@@ -546,7 +608,35 @@
             if (gameLoopId) cancelAnimationFrame(gameLoopId);
             
             FINAL_SCORE.textContent = score;
+            
+            // --- High Score Logic ---
+            const oldScores = loadHighScores();
+            // Since loadHighScores sorts descending, the first element is the highest
+            const highestOldScore = oldScores.length > 0 ? oldScores[0] : 0;
+            
+            let isNewHighScore = false;
+            
+            // Only update scores if the player scored something or if it's the first score ever
+            if (score > 0 || oldScores.length === 0) {
+                if (score > highestOldScore) {
+                    isNewHighScore = true;
+                }
+                updateHighScores(score);
+            }
+            
+            // Re-load updated scores to show the current overall highest score
+            const updatedScores = loadHighScores();
+            const currentHighestScore = updatedScores[0] || 0;
+
+            // Update UI
+            CURRENT_HIGHEST_SCORE_DISPLAY.textContent = currentHighestScore;
+            HIGH_SCORE_MESSAGE.style.display = isNewHighScore ? 'block' : 'none';
+            // --- End High Score Logic ---
+
             GAME_OVER_SCREEN.style.display = 'flex';
+            
+            // Update the main menu high score list
+            renderHighScores(); 
         }
 
         function gameLoop(currentTime) {
@@ -555,7 +645,7 @@
             } 
             drawGame(); 
 
-            if (!isGameOver && (isGamePaused || !isGamePaused)) {
+            if (!isGameOver) {
                 gameLoopId = requestAnimationFrame(gameLoop);
             }
         }
@@ -573,6 +663,7 @@
 
             const rect = canvas.getBoundingClientRect();
             
+            // Calculate coordinates relative to the canvas size
             const mouseX = (event.clientX - rect.left) * (canvas.width / rect.width);
             const mouseY = (event.clientY - rect.top) * (canvas.height / rect.height);
 
@@ -595,7 +686,6 @@
             const key = e.key.toLowerCase();
             if (key === 'escape') {
                 e.preventDefault(); 
-                // Only pause/resume if the Game Over screen is not active
                 if (!isGameOver) {
                     isGamePaused ? resumeGame() : pauseGame();
                 }
@@ -610,6 +700,7 @@
 
         // --- Initial Setup ---
         resizeCanvas();
+        renderHighScores(); // Load and display scores immediately
         requestAnimationFrame(gameLoop); 
     });
 </script>

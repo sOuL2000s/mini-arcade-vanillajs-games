@@ -99,7 +99,7 @@
         
         #message-overlay p {
             font-size: 1.5em;
-            margin-bottom: 20px;
+            margin: 10px 0;
         }
 
         #start-button {
@@ -117,6 +117,25 @@
         #start-button:hover {
             background-color: #ff8c5a;
         }
+
+        /* High Score Styling */
+        #high-score-display {
+            margin: 15px 0 25px 0;
+            padding: 10px 20px;
+            background: rgba(0, 188, 212, 0.1);
+            border-left: 3px solid #00bcd4;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: #ff6a3c;
+            font-weight: bold;
+        }
+        #new-high-score-message {
+            color: #ff6a3c;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+
 
         /* Pause Menu Styles */
         #menu-pause-overlay { 
@@ -203,6 +222,12 @@
 
         <div id="message-overlay">
             <h1>Hyper-Click Challenge</h1>
+            
+            <!-- High Score Display -->
+            <div id="high-score-display">
+                Best Score: <span id="current-high-score">0</span> hits
+            </div>
+            
             <p id="initial-description">Click the square as fast as you can. Be careful not to click the background!</p>
             <p id="final-message">Click START CHALLENGE to begin.</p>
             <button id="start-button">Start Challenge</button>
@@ -247,14 +272,53 @@
         let isGamePaused = true; 
         let timeoutHandle = null;
 
-        // NEW: Flag to prevent immediate background failure after a successful hit
+        // Flag to prevent immediate background failure after a successful hit
         let isTransitioning = false; 
 
         // Constants for Random Delays
         const MIN_DELAY = 1000; 
         const MAX_DELAY = 3000; 
+        
+        // High Score Config
+        const HIGH_SCORE_KEY = 'hyperClickHighScore';
 
-        // --- Menu & Pause Logic (Unchanged) ---
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score (number of hits) from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseInt(score) : 0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlays. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            document.getElementById('current-high-score').textContent = highscore;
+        }
+
+
+        // --- Menu & Pause Logic ---
         
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape' && gameRunning) {
@@ -453,7 +517,7 @@
             gameRunning = true;
             isGamePaused = false;
             targetVisible = false;
-            isTransitioning = false; // Ensure clean start
+            isTransitioning = false; 
             
             gameAreaEl.classList.remove('failure');
             overlayEl.style.display = 'none';
@@ -474,12 +538,10 @@
                 return; 
             }
             
-            // FIX: If we are in transition (after a successful click or reset), ignore the background click
             if (isTransitioning) {
                 return;
             }
 
-            // Only fail if the game is running, not paused, and we are waiting for the target (!targetVisible)
             if (gameRunning && !isGamePaused && !targetVisible) {
                 handleFailure(false); 
             }
@@ -497,16 +559,32 @@
             
             overlayEl.style.display = 'flex';
             
+            // --- HIGH SCORE LOGIC ---
+            const finalScore = score;
+            const isNewHighScore = saveHighestScore(finalScore);
+            const currentHighest = loadHighestScore();
+
             let reasonText = wasSlow 
                 ? "You ran out of time or were too slow." 
                 : "You clicked the background too early!";
-                
-            finalMessageEl.innerHTML = `
+            
+            let message = `
                 <p>FINAL GAME OVER! You lost your last life because: ${reasonText}</p>
-                <h2>Final Score: ${score}</h2>
+                <h2>Final Score: ${finalScore}</h2>
             `;
+
+            if (isNewHighScore) {
+                message += `<p id="new-high-score-message">NEW HIGH SCORE! (Previous: ${currentHighest - 1})</p>`;
+            } else {
+                 message += `<p>Best Score: ${currentHighest} hits</p>`;
+            }
+            
+            finalMessageEl.innerHTML = message;
             
             startButton.textContent = "Start New Challenge";
+            
+            // Update the display for the next run
+            renderHighestScore();
         }
 
         // --- INITIAL SETUP ---
@@ -514,10 +592,11 @@
             overlayEl.style.display = 'flex';
             startButton.addEventListener('click', startGame);
             
-            // Set initial state displays
             livesDisplayEl.textContent = INITIAL_LIVES;
             targetEl.style.width = `${baseTargetSize}px`;
             targetEl.style.height = `${baseTargetSize}px`;
+            
+            renderHighestScore();
         });
 
     </script>

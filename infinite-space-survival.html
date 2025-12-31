@@ -114,6 +114,20 @@
             text-align: left;
             display: none;
         }
+        
+        /* High Score Display */
+        #high-score-display {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #00ffff;
+            font-size: 0.8em;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: #00ff00;
+            font-weight: bold;
+        }
 
         /* GAME OVER SCREEN */
         #game-over-screen {
@@ -148,6 +162,18 @@
             margin-top: 30px;
             transition: background-color 0.2s;
         }
+
+        /* High Score Results */
+        #highScoreMessage {
+            color: #00ff00; 
+            font-weight: bold; 
+            display: none; 
+            text-shadow: 0 0 10px #00ff00;
+        }
+        #currentHighestScoreDisplay {
+            font-size: 1em;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -162,9 +188,15 @@
         <!-- Player Spaceship -->
         <div id="player"></div>
         
-        <!-- NEW MENU OVERLAY -->
+        <!-- MENU OVERLAY -->
         <div id="menu-overlay">
             <h2>Void Runner</h2>
+            
+            <!-- HIGH SCORE DISPLAY -->
+            <div id="high-score-display">
+                Survival Record: <span id="current-high-score">0.00s</span>
+            </div>
+            
             <button id="btn-start" onclick="startGame()">Start Mission</button>
             <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
             <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -183,6 +215,11 @@
             <h1>SYSTEM FAILURE</h1>
             <p>You have been consumed by the void.</p>
             <p id="final-score"></p>
+            
+            <!-- HIGH SCORE RESULTS -->
+            <p id="highScoreMessage">NEW SURVIVAL RECORD!</p>
+            <p id="currentHighestScoreDisplay">Record Time: <span id="currentHighestScore">0.00s</span></p>
+
             <button id="restart-button" onclick="startGame()">Restart Mission</button>
         </div>
     </div>
@@ -191,12 +228,12 @@
         // --- GAME CONSTANTS AND STATE ---
         const PLAYER_SPEED = 5;
         const ASTEROID_SPAWN_RATE = 1500; 
-        const COLLISION_RADIUS_FACTOR = 0.8; // Use 80% of radius for collision for a softer hit zone
-        // ... (rest of constants and state) ...
+        const COLLISION_RADIUS_FACTOR = 0.8; 
+        const HIGH_SCORE_KEY = 'voidRunnerSurvivalTime'; 
 
-        // --- GAME STATE VARIABLES (from original code) ---
+        // --- GAME STATE VARIABLES ---
         let gameState = 'ready'; 
-        let isGamePaused = true; // Start paused
+        let isGamePaused = true; 
         let lastTime = 0;
         let score = 0;
         let asteroidTimer = 0;
@@ -209,13 +246,13 @@
             y: window.innerHeight / 2,
             width: 24,
             height: 24,
-            radius: 12, // Half of width/height
+            radius: 12, 
             hp: 3,
             rotation: 0,
-            isInvulnerable: false // New: Prevents instant death from multiple collisions
+            isInvulnerable: false 
         };
 
-        // --- DOM REFERENCES (from original code) ---
+        // --- DOM REFERENCES ---
         const gameContainer = document.getElementById('game-container');
         const scoreDisplay = document.getElementById('score-display');
         const hpDisplay = document.getElementById('hp-display');
@@ -226,8 +263,49 @@
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
+        
+        // High Score Elements
+        const HIGH_SCORE_MESSAGE = document.getElementById('highScoreMessage');
+        const CURRENT_HIGHEST_SCORE_SPAN = document.getElementById('currentHighestScore');
+        const CURRENT_HIGH_SCORE_MENU = document.getElementById('current-high-score');
 
-        // --- Menu Logic (unchanged) ---
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score (time in seconds) from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseFloat(score) : 0.0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0.0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toFixed(2));
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlay. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            CURRENT_HIGH_SCORE_MENU.textContent = highscore.toFixed(2) + 's';
+        }
+
+
+        // --- Menu Logic ---
         function toggleInstructions() {
             INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
         }
@@ -247,9 +325,10 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
+            renderHighestScore(); // Update displayed record on pause
         }
 
-        // --- INPUT HANDLING (unchanged) ---
+        // --- INPUT HANDLING ---
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 isGamePaused ? resumeGame() : pauseGame();
@@ -263,13 +342,13 @@
             keys[e.key.toLowerCase()] = false;
         });
 
-        // --- GAME INITIALIZATION & LOOP CONTROL (modified initGame) ---
+        // --- GAME INITIALIZATION & LOOP CONTROL ---
 
         function initGame() {
             gameState = 'running';
             isGamePaused = false;
             player.hp = 3;
-            player.isInvulnerable = false; // Reset invulnerability
+            player.isInvulnerable = false; 
             score = 0;
             asteroids = [];
             asteroidTimer = 0;
@@ -279,7 +358,7 @@
             player.x = window.innerWidth / 2;
             player.y = window.innerHeight / 2;
             player.rotation = 0;
-            player.element.style.opacity = 1; // Reset visual opacity
+            player.element.style.opacity = 1; 
 
             gameOverScreen.style.display = 'none';
             MENU_OVERLAY.style.display = 'none';
@@ -308,7 +387,7 @@
 
             updatePlayer(deltaTime);
             updateAsteroids(deltaTime);
-            checkCollisions(); // Now working!
+            checkCollisions(); 
             spawnAsteroid(deltaTime);
             updateScore(deltaTime);
             updateHUD();
@@ -319,12 +398,24 @@
         function gameOver() {
             gameState = 'gameover';
             isGamePaused = true;
-            gameOverScreen.style.display = 'flex';
+            
+            const finalScore = parseFloat(score.toFixed(2));
             document.getElementById('final-score').textContent = 
-                `Time survived: ${score.toFixed(2)} seconds.`;
+                `Time survived: ${finalScore.toFixed(2)} seconds.`;
+
+            // --- High Score Logic ---
+            const isNewHighScore = saveHighestScore(finalScore);
+            const currentHighest = loadHighestScore();
+
+            CURRENT_HIGHEST_SCORE_SPAN.textContent = currentHighest.toFixed(2) + 's';
+            HIGH_SCORE_MESSAGE.style.display = isNewHighScore ? 'block' : 'none';
+            renderHighestScore(); // Update menu display
+            // --- End High Score Logic ---
+
+            gameOverScreen.style.display = 'flex';
         }
 
-        // --- PLAYER LOGIC (minor modification to playerHit) ---
+        // --- PLAYER LOGIC ---
 
         function updatePlayer(deltaTime) {
             let dx = 0;
@@ -337,11 +428,14 @@
             if (keys['a'] || keys['arrowleft']) dx -= moveStep;
             if (keys['d'] || keys['arrowright']) dx += moveStep;
 
-            if (dx !== 0 && dy !== 0) {
+            if (dx !== 0 || dy !== 0) {
                 const magnitude = Math.sqrt(dx * dx + dy * dy);
                 // Normalize vector for diagonal movement
-                dx = (dx / magnitude) * moveStep;
-                dy = (dy / magnitude) * moveStep;
+                if (magnitude !== 0) {
+                     const factor = moveStep / magnitude;
+                     dx *= factor;
+                     dy *= factor;
+                }
             }
 
             player.x += dx;
@@ -367,7 +461,7 @@
             if (gameState !== 'running' || player.isInvulnerable) return;
             
             player.hp--;
-            updateHUD(); // Immediate HUD update
+            updateHUD(); 
 
             // Visual feedback (Red flash)
             player.element.classList.add('hit-flash');
@@ -385,33 +479,33 @@
                 player.isInvulnerable = false;
                 clearInterval(flashInterval);
                 player.element.style.opacity = '1'; 
-            }, 1500); // 1.5 seconds invulnerability
+            }, 1500); 
 
             if (player.hp <= 0) {
                 gameOver();
             }
         }
 
-        // --- ASTEROID LOGIC (Uses window.innerWidth/Height) (unchanged) ---
+        // --- ASTEROID LOGIC ---
 
         function createAsteroid() {
             const size = 20 + Math.random() * 40; 
-            const baseSpeed = 1 + Math.random() * 2.5; // Slightly faster base speed for challenge
+            const baseSpeed = 1 + Math.random() * 2.5; 
 
             let startX, startY, vx, vy;
             const edge = Math.floor(Math.random() * 4); 
 
             const screenW = window.innerWidth;
             const screenH = window.innerHeight;
-            const targetX = screenW / 2 + (Math.random() * screenW * 0.2 - screenW * 0.1); // Target center area
+            const targetX = screenW / 2 + (Math.random() * screenW * 0.2 - screenW * 0.1); 
             const targetY = screenH / 2 + (Math.random() * screenH * 0.2 - screenH * 0.1);
 
             // Determine starting position outside the screen
             switch (edge) {
-                case 0: startX = Math.random() * screenW; startY = -size; break; // Top
-                case 1: startX = screenW + size; startY = Math.random() * screenH; break; // Right
-                case 2: startX = Math.random() * screenW; startY = screenH + size; break; // Bottom
-                case 3: startX = -size; startY = Math.random() * screenH; break; // Left
+                case 0: startX = Math.random() * screenW; startY = -size; break; 
+                case 1: startX = screenW + size; startY = Math.random() * screenH; break; 
+                case 2: startX = Math.random() * screenW; startY = screenH + size; break; 
+                case 3: startX = -size; startY = Math.random() * screenH; break; 
             }
 
             const dx = targetX - startX;
@@ -431,7 +525,7 @@
             const newAsteroid = {
                 element: asteroidElement,
                 id: Date.now() + Math.random(),
-                x: startX + size/2, // Adjust x, y to be the center of the asteroid
+                x: startX + size/2, 
                 y: startY + size/2,
                 radius: size / 2,
                 vx: vx,
@@ -444,8 +538,8 @@
 
         function spawnAsteroid(deltaTime) {
             asteroidTimer += deltaTime;
-            let currentSpawnRate = ASTEROID_SPAWN_RATE * (1 / (1 + score / 30)); // Make spawning faster over time
-            currentSpawnRate = Math.max(500, currentSpawnRate); // Cap the rate at 500ms
+            let currentSpawnRate = ASTEROID_SPAWN_RATE * (1 / (1 + score / 30)); 
+            currentSpawnRate = Math.max(500, currentSpawnRate); 
             
             if (asteroidTimer >= currentSpawnRate) {
                 createAsteroid();
@@ -486,12 +580,11 @@
             }
         }
 
-        // --- COLLISION DETECTION (FIXED AND IMPLEMENTED) ---
+        // --- COLLISION DETECTION ---
 
         function checkCollisions() {
             if (player.isInvulnerable) return;
 
-            // Player position is always (player.x, player.y) which is the center of the triangle base
             const playerCenterX = player.x; 
             const playerCenterY = player.y;
 
@@ -502,53 +595,44 @@
                 const dy = asteroid.y - playerCenterY;
                 const distance = Math.sqrt(dx * dx + dy * dy);
 
-                // Calculate combined radius for collision
-                // Use a slightly larger radius for the player because the "center" of the triangle
-                // is at its base, not its visual center. 
                 const combinedRadius = (player.radius * 1.5) + asteroid.radius; 
                 
-                // Check for collision using the COLLISION_RADIUS_FACTOR
                 if (distance < combinedRadius * COLLISION_RADIUS_FACTOR) {
                     playerHit();
                     
-                    // Remove the collided asteroid instantly
                     asteroid.element.remove();
                     asteroids.splice(i, 1);
-                    i--; // Adjust index after splice
+                    i--; 
                     
-                    // Return early to prevent multiple hits in one frame
                     return; 
                 }
             }
         }
 
-        // --- HUD AND SCORE (FIXED AND IMPLEMENTED) ---
+        // --- HUD AND SCORE ---
 
         function updateScore(deltaTime) {
-            // Only increase score if the game is running (unpaused)
             score += deltaTime / 1000;
         }
 
         function updateHUD() {
             scoreDisplay.textContent = `Time Survived: ${score.toFixed(2)}s`;
             
-            // Generate a visual HP string (e.g., "HP: ❤❤❤")
             let hpString = 'HP: ';
             for (let i = 0; i < 3; i++) {
                 if (i < player.hp) {
-                    hpString += '❤'; // Full Heart
+                    hpString += '❤'; 
                 } else {
-                    hpString += '♡'; // Empty Heart (or any empty placeholder)
+                    hpString += '♡'; 
                 }
             }
             hpDisplay.innerHTML = hpString;
         }
 
-        // --- INITIAL SETUP (unchanged) ---
+        // --- INITIAL SETUP ---
         window.onload = () => {
-            // Initial display of the menu
+            renderHighestScore(); // Load high score on load
             MENU_OVERLAY.style.display = 'flex';
-            // The game loop starts running, but immediately hits the 'if (isGamePaused)' check until Start is pressed.
             requestAnimationFrame(gameLoop); 
         };
 

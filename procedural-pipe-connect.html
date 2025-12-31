@@ -126,6 +126,21 @@
             display: none;
         }
         
+        /* High Score Display */
+        #high-score-display {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #3498db;
+            font-size: 0.8em;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: #2ecc71;
+            font-weight: bold;
+        }
+
+
         /* === NEW PIPE VISUALIZATION === */
 
         .pipe-visual {
@@ -172,30 +187,13 @@
 
         /* 2. Corner Pipe (Type 2: N-E) */
         .cell[data-type="2"] .pipe-visual::before { 
-            /* L-shape defined by two segments: North and East */
-            width: var(--cell-size);
-            height: var(--cell-size);
-            top: 0;
-            left: 0;
-            background: none;
-            /* Box shadow creates the L shape */
-            box-shadow: 
-                /* North leg (half length, centered) */
-                0 calc(-1 * var(--half-thickness)) 0 0 var(--pipe-color),
-                /* East leg (full length, top aligned) */
-                var(--pipe-thickness) 0 0 0 var(--pipe-color),
-                /* The corner fill */
-                calc(var(--half-thickness) * -1) calc(var(--half-thickness) * -1) 0 0 var(--pipe-color);
-            
-            /* Important: Need to manually draw the two lines and join them,
-               Using two box shadows for the corner type */
+            /* Redefining L-shape using box shadow relative to the center dot */
             width: var(--pipe-thickness);
             height: var(--pipe-thickness);
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
             
-            /* Redefining L-shape using box shadow relative to the center dot */
             box-shadow: 
                 /* North leg (Upwards) */
                 0 calc(-1 * var(--cell-size) / 2) 0 var(--half-thickness) var(--pipe-color),
@@ -243,13 +241,11 @@
         .cell.on-path .pipe-visual::after {
             background-color: var(--solved-path-color); /* Center dot color */
         }
-        .cell.on-path[data-type="1"] .pipe-visual::before,
         .cell.on-path[data-type="2"] .pipe-visual::before,
         .cell.on-path[data-type="3"] .pipe-visual::before,
         .cell.on-path[data-type="4"] .pipe-visual::before {
              /* Use filter to change the color of the box-shadow generated pipe segments */
              filter: hue-rotate(180deg) brightness(1.5) saturate(2); 
-             background-color: var(--solved-path-color);
         }
         
         /* SPECIAL HANDLING for Straight Pipe (Type 1) which uses width/height instead of box-shadow */
@@ -306,6 +302,12 @@
     <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Circuit Flow</h2>
+        
+        <!-- HIGH SCORE DISPLAY -->
+        <div id="high-score-display">
+            Max Levels Completed: <span id="current-high-score">0</span>
+        </div>
+        
         <button id="btn-start" onclick="resumeGame()">Start Puzzle</button>
         <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
         <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -330,6 +332,8 @@
         let isGamePaused = true; 
         const GRID_CONTAINER = document.getElementById('game-grid');
         
+        const HIGH_SCORE_KEY = 'circuitFlowHighScore';
+
         // Pipe Connections: [N, E, S, W] 
         const PIPE_MAP = {
             0: { id: 0, connections: [false, false, false, false] },
@@ -351,6 +355,45 @@
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
+        
+        // High Score Elements
+        const CURRENT_HIGH_SCORE_DISPLAY = document.getElementById('current-high-score');
+
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score (levels completed) from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseInt(score) : 0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlay. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            CURRENT_HIGH_SCORE_DISPLAY.textContent = highscore;
+        }
+
 
         // --- Menu Logic ---
         function toggleInstructions() {
@@ -368,6 +411,7 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
+            renderHighestScore(); // Update displayed record on pause
         }
 
         // --- UTILITY FUNCTIONS ---
@@ -561,7 +605,7 @@
             renderGrid();
         }
 
-        // --- VALIDATION LOGIC (Path Tracing - Unchanged from last fix) ---
+        // --- VALIDATION LOGIC (Path Tracing) ---
         
         function checkWin() {
             if (isGamePaused) return false;
@@ -655,6 +699,9 @@
                     if (el) el.classList.add('on-path');
                 });
                 
+                // --- HIGH SCORE UPDATE ---
+                saveHighestScore(score);
+
                 setTimeout(() => {
                     document.getElementById('message').style.display = 'none';
                     increaseDifficulty();
@@ -740,6 +787,7 @@
             document.getElementById('moves-display').textContent = moves;
             
             generatePuzzle();
+            renderHighestScore(); // Load high score on init
             
             pauseGame(); 
             BTN_START.style.display = 'block';

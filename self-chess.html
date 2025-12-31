@@ -174,6 +174,20 @@
             text-align: left;
             display: none;
         }
+
+        /* High Score/Stats Styling */
+        #high-score-display {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #e0e4cc;
+            font-size: 0.8em;
+        }
+        #total-games-stat {
+            font-size: 1.2em;
+            color: #00ffff;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -191,6 +205,12 @@
         
         <div id="menu-overlay">
             <h2>Self Chess</h2>
+            
+            <!-- HIGH SCORE / STATS DISPLAY -->
+            <div id="high-score-display">
+                Total Games Completed: <span id="total-games-stat">0</span>
+            </div>
+            
             <button id="btn-start" onclick="startGame()">Start Game (White)</button>
             <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
             <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -219,6 +239,7 @@
             'k': '&#9818;', 'q': '&#9819;', 'r': '&#9820;', 'b': '&#9821;', 'n': '&#9822;', 'p': '&#9823;'
         };
         const STARTING_FEN = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+        const GAME_STATS_KEY = 'selfChessTotalGames';
 
         // --- Game State ---
         let board = [];
@@ -227,6 +248,7 @@
         let isBoardRotated = false; 
         let isGamePaused = true;
         let gameRunning = false;
+        let totalGamesCompleted = 0;
 
         // Tracks piece movement for Castling eligibility
         let hasMoved = {
@@ -246,7 +268,40 @@
         const gameOverScreenEl = document.getElementById('game-over-screen');
         const finalStatusEl = document.getElementById('final-status');
 
-        // --- Utility & Menu Functions (Mostly unchanged) ---
+        // Stats Elements
+        const totalGamesStatEl = document.getElementById('total-games-stat');
+
+
+        // --- High Score / Stats Management ---
+        
+        /** Loads total games completed from local storage. */
+        function loadTotalGames() {
+            try {
+                const count = localStorage.getItem(GAME_STATS_KEY);
+                return count ? parseInt(count) : 0;
+            } catch (e) {
+                console.error("Error loading game stats:", e);
+                return 0;
+            }
+        }
+
+        /** Saves the updated total games count. */
+        function saveTotalGames(count) {
+            try {
+                localStorage.setItem(GAME_STATS_KEY, count.toString());
+            } catch (e) {
+                console.error("Error saving game stats:", e);
+            }
+        }
+
+        /** Renders the game statistics on the menu overlay. */
+        function renderGameStats() {
+            totalGamesCompleted = loadTotalGames();
+            totalGamesStatEl.textContent = totalGamesCompleted;
+        }
+
+
+        // --- Utility & Menu Functions ---
         
         function toggleInstructions() {
             instructionsBoxEl.style.display = instructionsBoxEl.style.display === 'block' ? 'none' : 'block';
@@ -265,6 +320,7 @@
                 btnStartEl.style.display = 'none';
                 btnResumeEl.style.display = 'block'; 
                 instructionsBoxEl.style.display = 'none';
+                renderGameStats(); // Update stats on pause
             }
         }
         
@@ -313,17 +369,14 @@
 
         // --- Check and Castling Logic ---
 
-        // Checks if a given square (r, c) is attacked by the specified attackerColor
         function isSquareAttacked(r, c, attackerColor) {
             const opponentColor = attackerColor;
             
-            // Iterate through every square on the board
             for (let i = 0; i < GRID_SIZE; i++) {
                 for (let j = 0; j < GRID_SIZE; j++) {
                     const piece = board[i][j];
                     if (piece && getPieceColor(piece) === opponentColor) {
                         
-                        // We need the PSEUDO-LEGAL moves of the attacker
                         const pseudoMoves = getValidMoves(i, j, true); 
                         
                         if (pseudoMoves.some(move => move.r === r && move.c === c)) {
@@ -342,18 +395,15 @@
             return isSquareAttacked(kingPos.r, kingPos.c, attackerColor);
         }
         
-        // Simulates a move and checks if the King is safe afterwards.
         function isMoveLegal(startR, startC, endR, endC, color) {
             const originalPiece = board[startR][startC];
             const capturedPiece = board[endR][endC];
             
-            // Perform temporary move
             board[endR][endC] = originalPiece;
             board[startR][startC] = null;
 
             const isSafe = !isKingInCheck(color);
 
-            // Revert temporary move
             board[startR][startC] = originalPiece;
             board[endR][endC] = capturedPiece;
 
@@ -362,10 +412,6 @@
 
         // --- Move Generation ---
 
-        /**
-         * Calculates pseudo-legal moves for a piece at (r, c).
-         * @param {boolean} ignoreCastling If true, skips castling logic (used for attack detection).
-         */
         function getValidMoves(r, c, ignoreCastling = false) {
             const pieceCode = board[r][c];
             if (!pieceCode) return [];
@@ -374,7 +420,6 @@
             const moves = [];
             const pieceType = pieceCode.toLowerCase();
 
-            // Helper for sliding pieces (Rook, Bishop, Queen)
             function checkSlidingMoves(directions) {
                 for (const [dr, dc] of directions) {
                     let nr = r + dr;
@@ -387,7 +432,7 @@
                             moves.push({ r: nr, c: nc });
                         } else {
                             if (targetColor !== color) {
-                                moves.push({ r: nr, c: nc }); // Capture
+                                moves.push({ r: nr, c: nc }); 
                             }
                             break; 
                         }
@@ -397,30 +442,25 @@
                 }
             }
             
-            // --- Standard Move Generation ---
             if (pieceType === 'p') {
                 const direction = (color === 'W') ? -1 : 1; 
                 const startRank = (color === 'W') ? 6 : 1; 
                 
-                // 1. Forward 1 step
                 let nr1 = r + direction;
                 if (isOnBoard(nr1, c) && !board[nr1][c]) {
                     moves.push({ r: nr1, c: c });
 
-                    // 2. Forward 2 steps (from start rank)
                     let nr2 = r + 2 * direction;
                     if (r === startRank && isOnBoard(nr2, c) && !board[nr2][c] && !board[r + direction][c]) {
                         moves.push({ r: nr2, c: c });
                     }
                 }
 
-                // 3. Captures (Diagonal)
                 for (const dc of [-1, 1]) {
                     const nc = c + dc;
                     if (isOnBoard(nr1, nc)) {
                         const targetPiece = board[nr1][nc];
                         const targetColor = getPieceColor(targetPiece);
-                        // Pawns only capture diagonally
                         if (targetPiece && targetColor !== color) {
                             moves.push({ r: nr1, c: nc });
                         }
@@ -444,7 +484,6 @@
                     }
                 }
             } else if (pieceType === 'k') {
-                // King: 1 step in any direction
                 for (let dr = -1; dr <= 1; dr++) {
                     for (let dc = -1; dc <= 1; dc++) {
                         if (dr === 0 && dc === 0) continue;
@@ -456,7 +495,6 @@
                     }
                 }
 
-                // --- Castling (Only if not ignoring it for attack checks) ---
                 if (!ignoreCastling) {
                     const rank = (color === 'W' ? 7 : 0);
                     const kingKey = color + '_K';
@@ -467,22 +505,20 @@
                         // King-side Castling (Short)
                         if (!hasMoved[`${color}_R_7`] && 
                             !board[rank][5] && !board[rank][6] &&
-                            !isSquareAttacked(rank, 4, opponentColor) && // King not in check
-                            !isSquareAttacked(rank, 5, opponentColor) && // Not moving through check
-                            !isSquareAttacked(rank, 6, opponentColor)) { // Not landing in check
+                            !isSquareAttacked(rank, 4, opponentColor) && 
+                            !isSquareAttacked(rank, 5, opponentColor) && 
+                            !isSquareAttacked(rank, 6, opponentColor)) { 
                             
-                            // Use a special target coordinate (e.g., c=6) to indicate castling
                             moves.push({ r: rank, c: 6, isCastling: true, rookFrom: 7, rookTo: 5 });
                         }
 
                         // Queen-side Castling (Long)
                         if (!hasMoved[`${color}_R_0`] && 
-                            !board[rank][3] && !board[rank][2] && !board[rank][1] && // Must be empty
+                            !board[rank][3] && !board[rank][2] && !board[rank][1] && 
                             !isSquareAttacked(rank, 4, opponentColor) && 
-                            !isSquareAttacked(rank, 3, opponentColor) && // Not moving through check
-                            !isSquareAttacked(rank, 2, opponentColor)) { // Not landing in check
+                            !isSquareAttacked(rank, 3, opponentColor) && 
+                            !isSquareAttacked(rank, 2, opponentColor)) { 
                             
-                            // Use a special target coordinate (e.g., c=2) to indicate castling
                             moves.push({ r: rank, c: 2, isCastling: true, rookFrom: 0, rookTo: 3 });
                         }
                     }
@@ -492,9 +528,6 @@
             return moves;
         }
         
-        /**
-         * Filters pseudo-legal moves through the safety check (isMoveLegal).
-         */
         function getLegalMoves(r, c) {
             const pieceCode = board[r][c];
             if (!pieceCode) return [];
@@ -504,7 +537,6 @@
             const legalMoves = [];
 
             for (const move of pseudoMoves) {
-                // If it's castling, we rely on the extensive checks already done in getValidMoves
                 if (move.isCastling) {
                     legalMoves.push(move);
                 } else if (isMoveLegal(r, c, move.r, move.c, color)) {
@@ -517,7 +549,6 @@
         // --- Board & UI Management ---
 
         function fenToBoard(fen) {
-            // (Function is unchanged)
             const rows = fen.split(' ')[0].split('/');
             const newBoard = [];
             for (let r = 0; r < GRID_SIZE; r++) {
@@ -624,7 +655,6 @@
             
             // 1. Select/Deselect
             if (pieceColor === currentTurn) {
-                // If clicking the currently selected piece, deselect
                 if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
                     selectedCell = null;
                     clearHighlights();
@@ -632,7 +662,6 @@
                     return;
                 }
                 
-                // Select new piece
                 clearHighlights();
                 selectedCell = { r, c };
                 highlightValidMoves(r, c);
@@ -651,7 +680,6 @@
                     
                     const movingPiece = board[startR][startC];
                     
-                    // Check if this move corresponds to a castling action
                     const legalMoves = getLegalMoves(startR, startC);
                     const castlingMove = legalMoves.find(m => m.r === r && m.c === c && m.isCastling);
 
@@ -659,16 +687,13 @@
                         // Castling: Move King and Rook
                         const rank = (currentTurn === 'W' ? 7 : 0);
                         
-                        // 1. Move King
                         board[r][c] = movingPiece;
                         board[startR][startC] = null;
                         
-                        // 2. Move Rook
                         const rookPiece = board[rank][castlingMove.rookFrom];
                         board[rank][castlingMove.rookTo] = rookPiece;
                         board[rank][castlingMove.rookFrom] = null;
                         
-                        // Update tracking variables
                         updateHasMoved(startR, startC, movingPiece); 
                         updateHasMoved(rank, castlingMove.rookFrom, rookPiece); 
 
@@ -677,7 +702,6 @@
                         board[r][c] = movingPiece;
                         board[startR][startC] = null;
                         
-                        // Update tracking variables for King/Rook movement
                         updateHasMoved(startR, startC, movingPiece);
                     }
                     
@@ -688,7 +712,6 @@
                 }
             }
             
-            // If we click an empty or opponent square without a valid move, deselect
             if (selectedCell) {
                 selectedCell = null;
                 clearHighlights();
@@ -709,7 +732,6 @@
             let totalLegalMoves = 0;
             const pieces = (currentTurn === 'W' ? ['P', 'R', 'N', 'B', 'Q', 'K'] : ['p', 'r', 'n', 'b', 'q', 'k']);
             
-            // Calculate total legal moves for the current player
             for (let r = 0; r < GRID_SIZE; r++) {
                 for (let c = 0; c < GRID_SIZE; c++) {
                     if (pieces.includes(board[r][c])) {
@@ -719,6 +741,12 @@
             }
             
             if (totalLegalMoves === 0) {
+                
+                // --- GAME OVER: Record Stats ---
+                totalGamesCompleted++;
+                saveTotalGames(totalGamesCompleted);
+                renderGameStats(); // Update UI immediately
+                
                 if (isKingInCheck(currentTurn)) {
                     // Checkmate
                     finalStatusEl.textContent = `${(currentTurn === 'W' ? 'Black' : 'White')} Wins by Checkmate!`;
@@ -735,27 +763,21 @@
         }
 
         function switchTurn() {
-            // Switch player
             currentTurn = (currentTurn === 'W') ? 'B' : 'W';
             
-            // Update UI status
             turnIndicatorEl.textContent = (currentTurn === 'W') ? 'White' : 'Black';
             turnIndicatorEl.style.color = (currentTurn === 'W') ? '#f7f7f7' : '#333333';
             turnIndicatorEl.style.backgroundColor = (currentTurn === 'W') ? '#3c3f41' : '#e0e4cc';
             
-            // Check for game end conditions
             if (checkGameOver()) {
                 checkStatusEl.textContent = '';
                 return;
             }
             
-            // Update Check Status
             checkStatusEl.textContent = isKingInCheck(currentTurn) ? 'CHECK!' : '';
             
-            // Rotate the board for the new player's perspective
             rotateBoard();
             
-            // Rerender the board, applying new highlights if needed
             renderBoard(); 
         }
 
@@ -768,7 +790,6 @@
             isBoardRotated = false; 
             selectedCell = null; 
             
-            // Reset castling eligibility
             hasMoved = {
                 'W_K': false, 'B_K': false,
                 'W_R_0': false, 'W_R_7': false, 
@@ -792,7 +813,9 @@
         // --- Initial Setup ---
         window.onload = () => {
             setupBoardSize();
-            // Start with an empty board structure for initial rendering before startGame is called
+            // Load stats before rendering the menu
+            renderGameStats(); 
+            
             board = Array(GRID_SIZE).fill(null).map(() => Array(GRID_SIZE).fill(null));
             renderBoard(); 
             menuOverlayEl.style.display = 'flex';

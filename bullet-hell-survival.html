@@ -153,6 +153,40 @@
         pointer-events: none;
         display: none;
     }
+
+    /* High Score List Styling */
+    #high-score-list-container {
+        margin: 20px 0;
+        padding: 10px 20px;
+        background: rgba(0, 0, 0, 0.4);
+        border-radius: 5px;
+        border: 1px solid #88C0D0;
+    }
+    #high-score-list {
+        list-style: none; 
+        padding: 0; 
+        font-size: 0.8em; 
+        color: #A3BE8C; 
+        text-shadow: 0 0 3px #A3BE8C;
+        text-align: left;
+    }
+    #high-score-list li:first-child {
+        font-size: 1.1em;
+        color: #88C0D0;
+        text-shadow: 0 0 5px #88C0D0;
+    }
+
+    /* Game Over Score Message */
+    #highScoreMessage {
+        color: #A3BE8C; 
+        font-weight: bold; 
+        display: none; 
+        text-shadow: 0 0 10px #A3BE8C;
+    }
+    #currentHighestScoreDisplay {
+        font-size: 0.8em;
+    }
+
 </style>
 
 <div id="game-container">
@@ -169,6 +203,15 @@
     <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Starfall Dodgem</h2>
+
+        <!-- HIGH SCORE DISPLAY CONTAINER -->
+        <div id="high-score-list-container">
+            <h3>Top Survival Times (ms)</h3>
+            <ul id="high-score-list">
+                <!-- Scores will be inserted here by JavaScript -->
+            </ul>
+        </div>
+        
         <button id="btn-start" onclick="startGame()">Start Dodging</button>
         <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
         <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -186,6 +229,11 @@
         <h1>GAME OVER</h1>
         <p>Survival Time: <span id="final-score">0</span> ms</p>
         <p>Highest Difficulty Achieved: <span id="final-difficulty">1.0</span></p>
+
+        <!-- HIGH SCORE RESULTS -->
+        <p id="highScoreMessage" style="color: #A3BE8C; font-weight: bold; display: none; text-shadow: 0 0 10px #A3BE8C;">NEW SURVIVAL RECORD!</p>
+        <p id="currentHighestScoreDisplay">Highest Ever: <span id="currentHighestScore">0</span> ms</p>
+        
         <button id="restart-button">Play Again</button>
     </div>
 </div>
@@ -215,9 +263,9 @@
         color: '#88C0D0',
         pulseRadius: 0,
         pulseAlpha: 0,
-        currentLives: 3,        // NEW: Current lives
+        currentLives: 3,        
         maxLives: 3,
-        invulnerabilityFrames: 0 // NEW: I-frames counter
+        invulnerabilityFrames: 0 
     };
 
     let bullets = [];
@@ -231,7 +279,7 @@
     // --- UI Elements ---
     const scoreDisplay = document.getElementById('score-display');
     const difficultyDisplay = document.getElementById('difficulty-display');
-    const livesDisplay = document.getElementById('lives-display'); // NEW
+    const livesDisplay = document.getElementById('lives-display'); 
     const gameOverScreen = document.getElementById('game-over-screen');
     const finalScoreDisplay = document.getElementById('final-score');
     const finalDifficultyDisplay = document.getElementById('final-difficulty');
@@ -243,6 +291,65 @@
     const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
     const BTN_RESUME = document.getElementById('btn-resume');
     const BTN_START = document.getElementById('btn-start'); 
+
+    // High Score Elements
+    const HIGH_SCORE_KEY = 'starfallDodgemSurvivalTimes';
+    const HIGH_SCORE_MESSAGE = document.getElementById('highScoreMessage');
+    const CURRENT_HIGHEST_SCORE_SPAN = document.getElementById('currentHighestScore');
+    const HIGH_SCORE_LIST_UL = document.getElementById('high-score-list');
+
+
+    // --- High Score Management ---
+    
+    /** Loads high scores from local storage, returns array sorted descending (longest time first). */
+    function loadHighScores() {
+        try {
+            const scores = localStorage.getItem(HIGH_SCORE_KEY);
+            // Ensure scores are treated as numbers and sorted descending
+            const parsedScores = scores ? JSON.parse(scores).map(Number) : [];
+            return parsedScores.sort((a, b) => b - a);
+        } catch (e) {
+            console.error("Error loading high scores:", e);
+            return [];
+        }
+    }
+
+    /** Saves the updated score array to local storage, keeping only top 10. */
+    function saveHighScores(scores) {
+        // Sort and keep top 10
+        scores.sort((a, b) => b - a);
+        const topScores = scores.slice(0, 10);
+        try {
+            localStorage.setItem(HIGH_SCORE_KEY, JSON.stringify(topScores));
+        } catch (e) {
+            console.error("Error saving high scores:", e);
+        }
+    }
+
+    /** Adds a new score and persists the updated list. */
+    function updateHighScores(newScore) {
+        let scores = loadHighScores();
+        scores.push(newScore);
+        saveHighScores(scores);
+    }
+
+    /** Renders the high score list on the menu overlay. */
+    function renderHighScores() {
+        const scores = loadHighScores();
+        HIGH_SCORE_LIST_UL.innerHTML = '';
+        
+        if (scores.length === 0) {
+            HIGH_SCORE_LIST_UL.innerHTML = '<li>No records yet.</li>';
+            return;
+        }
+        
+        scores.forEach((s, index) => {
+            const li = document.createElement('li');
+            // Display score in seconds (with ms notation) for clarity
+            li.textContent = `#${index + 1}: ${(s / 1000).toFixed(2)} seconds (${s} ms)`;
+            HIGH_SCORE_LIST_UL.appendChild(li);
+        });
+    }
 
     // --- Initialization & Setup ---
     
@@ -264,8 +371,11 @@
         canvas.width = CANVAS_WIDTH;
         canvas.height = CANVAS_HEIGHT;
         
-        player.x = CANVAS_WIDTH / 2;
-        player.y = CANVAS_HEIGHT / 2;
+        // Only center player if they exist, otherwise initial resize handles it
+        if (player.x === 0 || player.y === 0 || !gameRunning) {
+            player.x = CANVAS_WIDTH / 2;
+            player.y = CANVAS_HEIGHT / 2;
+        }
         
         initStars();
     }
@@ -293,6 +403,7 @@
         BTN_RESUME.style.display = 'block'; 
         pausedText.style.display = 'block';
         INSTRUCTIONS_BOX.style.display = 'none';
+        renderHighScores(); // Update scores when pausing
     }
 
     // --- Input Handling ---
@@ -351,25 +462,53 @@
             keys[key] = false;
         }
 
-        requestAnimationFrame(gameLoop);
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+        }
+        animationFrameId = requestAnimationFrame(gameLoop);
     }
 
     function endGame() {
         gameRunning = false;
         isGamePaused = true;
         
-        // This ensures the current loop stops after calling endGame
-        cancelAnimationFrame(gameLoop); 
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId); 
+        }
 
         const totalSurvivalTime = Math.floor(performance.now() - startTime);
         
         finalScoreDisplay.textContent = totalSurvivalTime;
         finalDifficultyDisplay.textContent = difficultyMultiplier.toFixed(2);
         
+        // --- High Score Logic ---
+        const oldScores = loadHighScores();
+        const highestOldScore = oldScores.length > 0 ? oldScores[0] : 0;
+        
+        let isNewHighScore = false;
+        
+        if (totalSurvivalTime > 0) {
+             if (totalSurvivalTime > highestOldScore) {
+                isNewHighScore = true;
+            }
+            updateHighScores(totalSurvivalTime);
+        }
+
+        // Re-load updated scores to show the current overall highest score
+        const updatedScores = loadHighScores();
+        const currentHighestScore = updatedScores[0] || 0;
+        
+        CURRENT_HIGHEST_SCORE_SPAN.textContent = `${currentHighestScore} ms`;
+        HIGH_SCORE_MESSAGE.style.display = isNewHighScore ? 'block' : 'none';
+        // --- End High Score Logic ---
+
         gameOverScreen.style.display = 'flex';
+
+        // Update the main menu high score list
+        renderHighScores();
     }
 
-    // --- Update Logic ---
+    // --- Update Logic (Unchanged from original structure, just ensuring they are present) ---
 
     function updatePlayer() {
         let dx = 0;
@@ -384,8 +523,11 @@
         // Diagonal normalization
         if (dx !== 0 && dy !== 0) {
             const magnitude = Math.sqrt(dx * dx + dy * dy);
-            dx = (dx / magnitude) * player.speed;
-            dy = (dy / magnitude) * player.speed;
+            // Ensure no division by zero, although normalize handles this,
+            // standard approach for movement vector calculation:
+            const factor = player.speed / magnitude; 
+            dx = dx * factor;
+            dy = dy * factor;
         }
 
         player.x += dx;
@@ -432,8 +574,7 @@
                         player.invulnerabilityFrames = INVULNERABILITY_DURATION;
                     }
                 } else {
-                    // Player is currently invincible, ignore collision
-                    // We still remove the bullet if it hits, to clear the screen slightly
+                    // Player is currently invincible, ignore collision but remove bullet
                     bullets.splice(i, 1);
                 }
             }
@@ -513,7 +654,7 @@
         }
     }
 
-    // --- Drawing Functions ---
+    // --- Drawing Functions (Unchanged) ---
     
     function drawStars() {
         ctx.fillStyle = '#FFF';
@@ -598,14 +739,14 @@
         
         draw();
 
-        // Request next frame only if game is running (prevents unnecessary loops when fully paused)
         if (gameRunning) {
              animationFrameId = requestAnimationFrame(gameLoop);
         }
     }
 
-    // Initialize the game structure
+    // Initialize the game structure and load scores
     resizeCanvas();
+    renderHighScores();
     requestAnimationFrame(gameLoop); 
 
 </script>

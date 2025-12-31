@@ -64,7 +64,7 @@
             z-index: 200;
         }
         
-        /* --- NEW LIVES DISPLAY --- */
+        /* --- LIVES DISPLAY --- */
         #lives-display {
             position: absolute;
             top: 50px; 
@@ -76,7 +76,6 @@
             border-radius: 5px;
             z-index: 200;
         }
-        /* --- END LIVES DISPLAY --- */
 
         /* --- GAME OVER SCREEN --- */
         #game-over-screen {
@@ -113,6 +112,18 @@
             background-color: #45a049;
         }
         
+        /* High Score Results */
+        #highScoreMessage {
+            color: #ff4500; 
+            font-weight: bold; 
+            display: none; 
+            text-shadow: 0 0 10px #ff4500;
+        }
+        #currentHighestScoreDisplay {
+            font-size: 1em;
+            margin-top: 10px;
+        }
+
         /* --- MENU OVERLAY STYLES --- */
         #menu-overlay {
             position: absolute;
@@ -159,20 +170,39 @@
             text-align: left;
             display: none;
         }
+        
+        #high-score-display {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #ff4500;
+            font-size: 0.8em;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: #4CAF50;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
 
     <div id="game-container">
         <div id="score">Score: 0</div>
-        <div id="lives-display">Lives: 3</div> <!-- NEW LIVES UI ELEMENT -->
+        <div id="lives-display">Lives: 3</div> 
         <div id="world">
             <div id="player"></div>
         </div>
         
-        <!-- NEW MENU OVERLAY -->
+        <!-- MENU OVERLAY -->
         <div id="menu-overlay">
             <h2>Gravity Glide</h2>
+            
+            <!-- HIGH SCORE DISPLAY -->
+            <div id="high-score-display">
+                Longest Glide Distance: <span id="current-high-score">0</span>
+            </div>
+            
             <button id="btn-start" onclick="startGame()">Start Glide</button>
             <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
             <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -189,6 +219,11 @@
         <div id="game-over-screen">
             <h1>Game Over</h1>
             <p>Final Score: <span id="final-score">0</span></p>
+            
+            <!-- HIGH SCORE RESULTS -->
+            <p id="highScoreMessage">NEW HIGH SCORE!</p>
+            <p id="currentHighestScoreDisplay">Highest Ever: <span id="currentHighestScore">0</span></p>
+            
             <button onclick="startGame()">Restart Game</button>
         </div>
     </div>
@@ -196,18 +231,18 @@
     <script>
         // --- GAME CONSTANTS ---
         const GRAVITY = 0.8;
-        const JUMP_VELOCITY = 22; // Adjusted jump power
+        const JUMP_VELOCITY = 22; 
         const RUN_SPEED = 6;
         const PLATFORM_HEIGHT = 40;
         const PLAYER_SCREEN_X = 200; 
         const CAMERA_SMOOTHING = 0.1; 
-        const MAX_LIVES = 3; // Initial lives
+        const MAX_LIVES = 3; 
 
         // --- GAME STATE VARIABLES ---
         let player;
         let world;
         let scoreDisplay;
-        let livesDisplay; // Reference to the new element
+        let livesDisplay; 
         let gameOverScreen;
         let screenHeight; 
 
@@ -219,10 +254,10 @@
         let playerVelY = 0;
         let isGrounded = false;
         let isGameOver = false;
-        let isGamePaused = true; // Start paused
+        let isGamePaused = true; 
         let score = 0;
-        let lives = MAX_LIVES; // Current lives
-        let jumpsRemaining = 0; // Double Jump counter (0, 1, or 2)
+        let lives = MAX_LIVES; 
+        let jumpsRemaining = 0; 
 
         let lastPlatformX = 0;
         let currentLevelHeight = 0; 
@@ -233,6 +268,48 @@
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
+        
+        // High Score Elements
+        const HIGH_SCORE_KEY = 'gravityGlideHighScore';
+        const HIGH_SCORE_MESSAGE = document.getElementById('highScoreMessage');
+        const CURRENT_HIGHEST_SCORE_SPAN = document.getElementById('currentHighestScore');
+        const CURRENT_HIGH_SCORE_MENU = document.getElementById('current-high-score');
+
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseInt(score) : 0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlay and game over screen. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            CURRENT_HIGH_SCORE_MENU.textContent = highscore;
+            CURRENT_HIGHEST_SCORE_SPAN.textContent = highscore; 
+        }
 
 
         // --- Menu Logic ---
@@ -254,6 +331,7 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
+            renderHighestScore(); // Update the displayed high score
         }
 
         // --- INITIALIZATION ---
@@ -261,12 +339,13 @@
             player = document.getElementById('player');
             world = document.getElementById('world');
             scoreDisplay = document.getElementById('score');
-            livesDisplay = document.getElementById('lives-display'); // Get the new element
+            livesDisplay = document.getElementById('lives-display'); 
             gameOverScreen = document.getElementById('game-over-screen');
 
             screenHeight = window.innerHeight;
 
             setupInput();
+            renderHighestScore(); // Load and display high score on load
             
             // Show menu initially
             MENU_OVERLAY.style.display = 'flex';
@@ -313,28 +392,30 @@
             // Instantly reset camera view to the start
             targetWorldX = -(playerX - PLAYER_SCREEN_X);
             world.style.transform = `translateX(${targetWorldX}px)`;
+            
+            // Re-generate starting platform if it was removed
+            document.querySelectorAll('.platform').forEach(p => p.remove());
+            lastPlatformX = 0;
+            currentLevelHeight = window.innerHeight - PLATFORM_HEIGHT - 100;
+            createPlatform(0, currentLevelHeight, 1500);
+            lastPlatformX = 1500;
         }
 
         function startGame() {
             isGamePaused = false;
             isGameOver = false;
             score = 0;
-            lives = MAX_LIVES; // Reset lives
+            lives = MAX_LIVES; 
             
-            document.querySelectorAll('.platform').forEach(p => p.remove());
-
             screenHeight = window.innerHeight;
             currentLevelHeight = screenHeight - PLATFORM_HEIGHT - 100;
 
-            // Create initial long platform
-            createPlatform(0, currentLevelHeight, 1500);
-            lastPlatformX = 1500;
-            
-            respawnPlayer(); // Set initial position and jump count
+            respawnPlayer(); // Handles clearing old platforms and setting start position
 
             MENU_OVERLAY.style.display = 'none';
             gameOverScreen.style.display = 'none';
-            
+            HIGH_SCORE_MESSAGE.style.display = 'none';
+
             gameLoop(); 
         }
 
@@ -397,10 +478,6 @@
             // 3. Vertical Position Update
             let newPlayerY = playerY + playerVelY;
             
-            // Reset grounded status before collision check
-            // Note: We deliberately don't set jumpsRemaining=0 here,
-            // as we want to allow a double jump mid-air.
-
             // 4. Collision Detection
             let landedThisFrame = false;
             platforms.forEach(p => {
@@ -476,7 +553,19 @@
             if (isGameOver) return;
             isGameOver = true;
             isGamePaused = true;
-            document.getElementById('final-score').textContent = score;
+            
+            const finalScore = score;
+            document.getElementById('final-score').textContent = finalScore;
+
+            // --- High Score Logic ---
+            const isNewHighScore = saveHighestScore(finalScore);
+
+            // Re-render and update UI
+            renderHighestScore(); 
+            
+            HIGH_SCORE_MESSAGE.style.display = isNewHighScore ? 'block' : 'none';
+            // --- End High Score Logic ---
+            
             gameOverScreen.style.display = 'block';
         }
 

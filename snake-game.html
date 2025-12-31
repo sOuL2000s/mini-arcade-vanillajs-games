@@ -158,6 +158,28 @@
             font-size: clamp(1.2em, 3vw, 1.8em);
             margin-bottom: 25px;
         }
+        
+        /* High Score/Stats Styling */
+        #high-score-display {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid var(--board-border);
+            font-size: 0.8em;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: var(--snake-head);
+            font-weight: bold;
+        }
+        #highScoreMessage {
+            color: var(--board-border);
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-top: 10px;
+            display: none;
+        }
+
 
         button {
             padding: 12px 25px;
@@ -203,6 +225,12 @@
         <!-- PAUSE MENU OVERLAY -->
         <div id="menu-overlay" class="overlay-screen" style="display: flex;">
             <h2>Coiled Destiny</h2>
+            
+            <!-- HIGH SCORE DISPLAY -->
+            <div id="high-score-display">
+                Record Score: <span id="current-high-score">0</span>
+            </div>
+            
             <button id="btn-start" onclick="startGame()">Start Game</button>
             <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
             <button onclick="toggleInstructions()">Instructions</button>
@@ -227,6 +255,7 @@
         <div id="game-over-screen" class="overlay-screen">
             <h1>FINAL GAME OVER!</h1>
             <p>You ran out of lives.<br>Final Score: <span id="final-score">0</span></p>
+            <p id="highScoreMessage">NEW HIGH SCORE!</p>
             <button onclick="startGame()">Start New Game</button>
         </div>
         
@@ -247,6 +276,8 @@
         const SPEED_DECREMENT = 10;
         const MIN_SPEED_MS = 40;
         const INITIAL_LIVES = 3;
+        
+        const HIGH_SCORE_KEY = 'coiledDestinyHighScore';
 
         // --- Game State Variables ---
         let canvas, ctx;
@@ -275,6 +306,46 @@
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
+        
+        // High Score Elements
+        const CURRENT_HIGH_SCORE_DISPLAY = document.getElementById('current-high-score');
+        const HIGH_SCORE_MESSAGE = document.getElementById('highScoreMessage');
+
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score (number of food consumed) from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseInt(score) : 0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlays. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            CURRENT_HIGH_SCORE_DISPLAY.textContent = highscore;
+        }
+
 
         // --- Theme Management ---
         
@@ -282,6 +353,9 @@
             bodyElement.className = 'theme-' + themeName;
             if (gameRunning && !isGamePaused) {
                 draw();
+            } else if (canvas && ctx) {
+                 // Ensure initial draw even if paused
+                 draw();
             }
         }
         
@@ -289,9 +363,10 @@
             canvas = document.getElementById('game-board');
             ctx = canvas.getContext('2d');
             
-            resizeCanvas(); // Call the new resizing logic immediately
+            resizeCanvas(); 
             
             applyTheme(document.getElementById('theme-select').value);
+            renderHighestScore(); // Load high score on load
             
             MENU_OVERLAY.style.display = 'flex';
         };
@@ -300,7 +375,6 @@
         
         // Helper function to calculate full element height (including margins)
         function getOuterHeight(element) {
-            // Check if element exists or is hidden
             if (!element || window.getComputedStyle(element).display === 'none') return 0;
             const style = window.getComputedStyle(element);
             const margins = parseFloat(style.marginTop) + parseFloat(style.marginBottom);
@@ -308,32 +382,25 @@
         }
 
         function resizeCanvas() {
-            // 1. Get references to external elements
             const h1Element = document.querySelector('h1');
             const infoElement = document.getElementById('info-panel');
             const controlsElement = document.getElementById('controls');
             const gameContainer = document.getElementById('game-container');
 
-            // 2. Calculate reserved vertical space (Header + Info + Controls + Buffer)
-            // Add an extra buffer (e.g., 40px) for general body margins and spacing.
             const reservedVerticalSpace = getOuterHeight(h1Element) + 
                                         getOuterHeight(infoElement) + 
                                         getOuterHeight(controlsElement) + 
                                         40; 
 
             const availableHeight = window.innerHeight - reservedVerticalSpace;
-            const availableWidth = window.innerWidth * 0.95; // Leaving a slight horizontal margin
+            const availableWidth = window.innerWidth * 0.95; 
 
-            // 3. Determine the maximum possible square size
             let targetSize = Math.min(availableHeight, availableWidth);
             
-            // 4. Ensure the size is snapped to the GRID_SIZE (20)
             let newCanvasSize = Math.floor(targetSize / GRID_SIZE) * GRID_SIZE;
 
-            // Apply clamping (Min 400px for playability, Max 900px for visual comfort)
             newCanvasSize = Math.max(400, Math.min(900, newCanvasSize));
             
-            // If the size hasn't changed, skip DOM manipulation
             if (newCanvasSize === CANVAS_SIZE) return; 
 
             CANVAS_SIZE = newCanvasSize;
@@ -342,11 +409,9 @@
             canvas.height = CANVAS_SIZE;
             CELL_SIZE = CANVAS_SIZE / GRID_SIZE;
             
-            // Dynamically set the container size to frame the canvas perfectly
             gameContainer.style.width = `${CANVAS_SIZE}px`;
             gameContainer.style.height = `${CANVAS_SIZE}px`; 
 
-            // Crucial: We need to redraw the board after resizing
             if (gameRunning || isGamePaused) {
                 draw();
             }
@@ -372,6 +437,7 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
+            renderHighestScore(); // Update displayed record on pause
         }
         
         document.addEventListener('keydown', (e) => {
@@ -401,6 +467,7 @@
             
             gameOverScreen.style.display = 'none';
             MENU_OVERLAY.style.display = 'none';
+            HIGH_SCORE_MESSAGE.style.display = 'none';
 
             resetBoardState();
             startLoop();
@@ -591,7 +658,6 @@
             }
 
             if (newDirection) {
-                // Prevent queue bloat, only queue if the last item wasn't identical
                 if (directionQueue.length === 0 || directionQueue[directionQueue.length - 1].dx !== newDirection.dx || directionQueue[directionQueue.length - 1].dy !== newDirection.dy) {
                     directionQueue.push(newDirection);
                 }
@@ -634,6 +700,14 @@
             isGamePaused = true;
             
             finalScoreDisplay.innerText = score;
+
+            // --- HIGH SCORE LOGIC ---
+            const isNewHighScore = saveHighestScore(score);
+            renderHighestScore(); // Update menu display
+            
+            HIGH_SCORE_MESSAGE.style.display = isNewHighScore ? 'block' : 'none';
+            // --- End HIGH SCORE LOGIC ---
+
             gameOverScreen.style.display = 'flex';
         }
 

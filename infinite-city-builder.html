@@ -122,6 +122,20 @@
             text-align: left;
             display: none;
         }
+
+        /* High Score Display */
+        #high-score-display {
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-left: 3px solid #ff0;
+            font-size: 0.8em;
+        }
+        #current-high-score {
+            font-size: 1.2em;
+            color: #00f; /* Use a distinct color for the score itself */
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -133,9 +147,15 @@
         <p class="key-hint">Click near bottom edge to expand map!</p>
     </div>
     
-    <!-- NEW MENU OVERLAY -->
+    <!-- MENU OVERLAY -->
     <div id="menu-overlay">
         <h2>Minimal Metropolis</h2>
+        
+        <!-- HIGH SCORE DISPLAY -->
+        <div id="high-score-display">
+            Highest Tiles Built Ever: <span id="current-high-score">0</span>
+        </div>
+        
         <button id="btn-start" onclick="resumeGame()">Start City</button>
         <button id="btn-resume" style="display:none;" onclick="resumeGame()">Resume</button>
         <button id="btn-instructions" onclick="toggleInstructions()">Instructions</button>
@@ -167,6 +187,9 @@
             '2': { code: 'C', name: 'Commercial', color: 'color-C' },
             '3': { code: 'I', name: 'Industrial', color: 'color-I' }
         };
+        
+        // --- HIGH SCORE CONFIGURATION ---
+        const HIGH_SCORE_KEY = 'minimalMetropolisHighestScore';
 
         // --- GAME STATE ---
         let state = {
@@ -188,8 +211,47 @@
         const INSTRUCTIONS_BOX = document.getElementById('instructions-box');
         const BTN_RESUME = document.getElementById('btn-resume');
         const BTN_START = document.getElementById('btn-start');
+        
+        // High Score Elements
+        const CURRENT_HIGH_SCORE_DISPLAY = document.getElementById('current-high-score');
 
-        // --- Menu Logic ---
+
+        // --- High Score Management ---
+        
+        /** Loads the highest score from local storage. */
+        function loadHighestScore() {
+            try {
+                const score = localStorage.getItem(HIGH_SCORE_KEY);
+                return score ? parseInt(score) : 0;
+            } catch (e) {
+                console.error("Error loading high score:", e);
+                return 0;
+            }
+        }
+
+        /** Saves a new score if it is higher than the current saved score. */
+        function saveHighestScore(newScore) {
+            const currentHighest = loadHighestScore();
+            if (newScore > currentHighest) {
+                try {
+                    localStorage.setItem(HIGH_SCORE_KEY, newScore.toString());
+                    return true;
+                } catch (e) {
+                    console.error("Error saving high score:", e);
+                    return false;
+                }
+            }
+            return false;
+        }
+
+        /** Renders the highest score on the menu overlay. */
+        function renderHighestScore() {
+            const highscore = loadHighestScore();
+            CURRENT_HIGH_SCORE_DISPLAY.textContent = highscore;
+        }
+
+
+        // --- Utility & Menu Functions ---
         function toggleInstructions() {
             INSTRUCTIONS_BOX.style.display = INSTRUCTIONS_BOX.style.display === 'block' ? 'none' : 'block';
         }
@@ -205,17 +267,7 @@
             BTN_START.style.display = 'none';
             BTN_RESUME.style.display = 'block'; 
             INSTRUCTIONS_BOX.style.display = 'none';
-        }
-
-        // --- UTILITY FUNCTIONS ---
-
-        function updateUI() {
-            state.score++;
-            scoreDisplay.textContent = state.score;
-
-            const type = BUILDING_TYPES[state.currentTypeKey];
-            typeDisplay.textContent = type.name;
-            typeDisplay.className = type.color;
+            renderHighestScore(); // Update the displayed high score
         }
 
         function changeBuilding(key) {
@@ -265,12 +317,15 @@
         function checkAndExpandMap(r, c) {
             const size = state.gridSize;
 
+            // Only check for expansion if building near the current bottom edge
             if (r >= size - EXPANSION_THRESHOLD && !state.isExpanding) {
                 state.isExpanding = true;
                 
                 const currentSize = state.gridSize;
                 const newSize = currentSize + EXPANSION_AMOUNT;
                 
+                // Note: This only expands rows downwards. To fully expand, columns would also need expansion.
+                // Assuming based on the original code this is a downward expansion model.
                 const fragment = document.createDocumentFragment();
                 for (let row = currentSize; row < newSize; row++) {
                     for (let col = 0; col < currentSize; col++) {
@@ -289,6 +344,18 @@
 
 
         // --- EVENT HANDLERS ---
+        
+        function updateUI() {
+            state.score++;
+            scoreDisplay.textContent = state.score;
+
+            const type = BUILDING_TYPES[state.currentTypeKey];
+            typeDisplay.textContent = type.name;
+            typeDisplay.className = type.color;
+            
+            // High Score Check
+            saveHighestScore(state.score);
+        }
 
         function handleTileClick(event) {
             if (isGamePaused) return; 
@@ -310,13 +377,15 @@
         }
 
         function handleKeyDown(event) {
-            if (event.key === 'Escape') {
+            const key = event.key;
+            
+            if (key === 'Escape') {
+                event.preventDefault();
                 isGamePaused ? resumeGame() : pauseGame();
                 return;
             }
             if (isGamePaused) return; 
 
-            const key = event.key;
             if (key === '1' || key === '2' || key === '3') {
                 changeBuilding(key);
             }
@@ -329,7 +398,8 @@
             document.addEventListener('keydown', handleKeyDown);
 
             setupInitialMap();
-            updateUI(); 
+            updateUI(); // Set initial score to 1 and type display
+            renderHighestScore(); // Load and display the highest score
             
             // Show menu initially
             MENU_OVERLAY.style.display = 'flex';
